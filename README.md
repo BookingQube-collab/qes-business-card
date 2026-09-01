@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QES Business Card Leads
 
-## Getting Started
+Booth lead capture for **Qatar Event Show 2026 · Booth D14**.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router + TypeScript + Tailwind + lucide-react
+- Supabase (Postgres, Storage, Auth) for Phase 2 production data
+- OpenAI Vision OCR via `POST /api/business-card/extract`
+- Deploy target: Vercel
+
+## Run locally
 
 ```bash
+npm install
+cp .env.example .env.local   # fill values for Phase 2
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Without Supabase env vars the app runs in **local demo mode** (in-memory mock leads + simulated OCR).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run lint
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Phase 2 setup checklist
 
-## Learn More
+### 1. Supabase project
 
-To learn more about Next.js, take a look at the following resources:
+1. Create a project and copy **Project URL** + **anon key** + **service role key** into `.env.local`.
+2. Run migrations in the SQL editor (or Supabase CLI):
+   - `supabase/migrations/001_create_leads.sql`
+   - `supabase/migrations/002_storage_policies.sql`
+3. Auth → create staff users manually (email/password). Disable public signup.
+4. Confirm private Storage bucket `business-cards` exists with the policies from migration 002.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. OpenAI
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Set `OPENAI_API_KEY` in `.env.local` / Vercel. OCR never invents fields and never sets interest / priority / owner.
 
-## Deploy on Vercel
+### 3. Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Add the same env vars:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+OPENAI_API_KEY=
+```
+
+Deploy the App Router project. Staff sign in at the auth gate; capture compresses images client-side, extracts via the API route, then uploads to private storage and inserts a lead row.
+
+### 4. App behavior notes
+
+- Times & “Today” stats use **Asia/Qatar**
+- Duplicate warning on matching email or phone
+- Capture form draft in `sessionStorage`
+- Card images use lazy signed URLs when opening lead details
+- Capture homepage uses the instrumentation / sci-fi scanner UI (CSS keyframes only; no WebRTC)
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Local development |
+| `npm run lint` | ESLint |
+| `npm run build` | Production build |
