@@ -11,7 +11,8 @@ import {
   X,
 } from "lucide-react";
 import {
-  captureVideoFrame,
+  applyCameraFocus,
+  captureFromCamera,
   stopMediaStream,
   supportsGetUserMedia,
 } from "@/lib/capture-frame";
@@ -106,7 +107,11 @@ export function CardImagePicker({
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+        },
         audio: false,
       });
 
@@ -115,6 +120,7 @@ export function CardImagePicker({
         return;
       }
 
+      await applyCameraFocus(stream);
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -177,7 +183,11 @@ export function CardImagePicker({
     setCapturing(true);
     setCameraError(null);
     try {
-      const file = await captureVideoFrame(video, "business-card-scan");
+      const file = await captureFromCamera(
+        video,
+        streamRef.current,
+        "business-card-scan",
+      );
       const objectUrl = URL.createObjectURL(file);
       stopCamera();
       onImageSelected(file, objectUrl);

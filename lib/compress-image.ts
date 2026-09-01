@@ -1,11 +1,24 @@
+import { enhanceCanvasForOcr } from "@/lib/capture-frame";
+
 /**
  * Client-side image compression for booth uploads.
- * Max edge 1600px, prefer WebP ~0.78, JPEG fallback for Safari gaps.
+ * Max edge 2048px, high-quality JPEG for readable text.
  */
 export async function compressCardImage(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
-  const maxEdge = 1600;
-  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const maxEdge = 2048;
+  const maxDim = Math.max(bitmap.width, bitmap.height);
+  const skipReencode =
+    maxDim <= maxEdge &&
+    file.size <= 2.5 * 1024 * 1024 &&
+    (file.type === "image/jpeg" || file.type === "image/webp");
+
+  if (skipReencode) {
+    bitmap.close();
+    return file;
+  }
+
+  const scale = Math.min(1, maxEdge / maxDim);
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -19,8 +32,9 @@ export async function compressCardImage(file: File): Promise<File> {
   }
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
+  enhanceCanvasForOcr(ctx, width, height);
 
-  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.85);
+  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.92);
   if (jpeg && jpeg.size > 0) {
     return new File([jpeg], replaceExt(file.name, "jpg"), {
       type: "image/jpeg",
@@ -28,7 +42,7 @@ export async function compressCardImage(file: File): Promise<File> {
     });
   }
 
-  const webp = await canvasToBlob(canvas, "image/webp", 0.78);
+  const webp = await canvasToBlob(canvas, "image/webp", 0.92);
   if (webp && webp.size > 0) {
     return new File([webp], replaceExt(file.name, "webp"), {
       type: "image/webp",

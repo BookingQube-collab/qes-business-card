@@ -14,7 +14,10 @@ Rules:
 - Extract only fields clearly visible on the card. Never invent or guess missing values. Use null when not clearly readable or unsure.
 - Do not set interest, priority, owner, or notes.
 - Prefer the most prominent person name and company on the card.
-- Keep phone numbers and emails exactly as printed when readable.
+- Copy company names in full, including short prefixes or acronyms at the start (e.g. "E3 Events & Entertainment Enterprises", not "Events & Entertainment Enterprises").
+- For phone: transcribe the printed mobile/telephone number exactly, including country codes (+974, +971, etc.), spaces, and dashes as shown.
+- For email: transcribe the printed email address exactly. It must look like a valid email (user@domain.tld). Do not confuse similar letters (l/I/1, O/0) — re-read blurry characters carefully.
+- If multiple phones or emails appear, prefer the one labeled mobile/cell/direct or the most prominent contact line.
 - All values must be string or null.`;
 
 export async function POST(request: Request) {
