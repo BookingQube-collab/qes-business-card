@@ -6,7 +6,7 @@ Booth lead capture for **Qatar Event Show 2026 · Booth D14**.
 
 - Next.js App Router + TypeScript + Tailwind + lucide-react
 - Supabase (Postgres, Storage, Auth) for Phase 2 production data
-- OpenAI Vision OCR via `POST /api/business-card/extract`
+- Gemini Vision OCR (preferred) via `POST /api/business-card/extract`; OpenAI fallback optional
 - Deploy target: Vercel
 
 ## Run locally
@@ -17,7 +17,7 @@ cp .env.example .env.local   # fill values for Phase 2
 npm run dev
 ```
 
-Without Supabase env vars the app runs in **local demo mode** (in-memory mock leads + simulated OCR).
+Without Supabase env vars the app runs in **local demo mode** (in-memory mock leads). Without `GEMINI_API_KEY` / `OPENAI_API_KEY`, OCR returns simulated demo fields.
 
 ```bash
 npm run lint
@@ -35,9 +35,9 @@ npm run build
 3. Auth → create staff users manually (email/password). Disable public signup.
 4. Confirm private Storage bucket `business-cards` exists with the policies from migration 002.
 
-### 2. OpenAI
+### 2. OCR (Gemini preferred)
 
-Set `OPENAI_API_KEY` in `.env.local` / Vercel. OCR never invents fields and never sets interest / priority / owner.
+Set `GEMINI_API_KEY` in `.env.local` / Vercel (preferred). Optionally set `OPENAI_API_KEY` as fallback when Gemini is unset. OCR never invents fields and never sets interest / priority / owner.
 
 ### 3. Vercel
 
@@ -47,6 +47,7 @@ Add the same env vars:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
 OPENAI_API_KEY=
 ```
 

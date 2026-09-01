@@ -15,6 +15,7 @@ type CaptureViewProps = {
   step: CaptureStep;
   imageUrl: string | null;
   formValues: LeadFormValues;
+  ocrError?: string | null;
   onImageSelected: (file: File, objectUrl: string) => void;
   onRetake: () => void;
   onRemove: () => void;
@@ -50,6 +51,7 @@ export function CaptureView({
   step,
   imageUrl,
   formValues,
+  ocrError,
   onImageSelected,
   onRetake,
   onRemove,
@@ -140,9 +142,18 @@ export function CaptureView({
                     />
                   </div>
                 ) : null}
-                <div className="qes-mono mb-1 text-[10px] tracking-[0.14em] text-[#4ade80]">
-                  FIELDS READY — CONFIRM &amp; SAVE
-                </div>
+                {ocrError ? (
+                  <p
+                    className="rounded-lg border border-[#3f1d2e] bg-[#1a0f14] px-3 py-2.5 text-[13px] leading-relaxed text-[#fb7185]"
+                    role="alert"
+                  >
+                    {ocrError} You can enter the details manually below.
+                  </p>
+                ) : (
+                  <div className="qes-mono mb-1 text-[10px] tracking-[0.14em] text-[#4ade80]">
+                    FIELDS READY — CONFIRM &amp; SAVE
+                  </div>
+                )}
                 <LeadForm
                   values={formValues}
                   onChange={onFormChange}

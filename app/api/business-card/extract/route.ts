@@ -1,31 +1,26 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { mockExtractedContact } from "@/lib/lead-utils";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
 
+const GEMINI_MODEL = "gemini-2.0-flash";
+
 const SYSTEM = `You extract contact fields from a photograph of a business card.
 Return ONLY valid JSON with keys: name, company, position, phone, email.
 Rules:
-- Never invent or guess missing values. Use null when not clearly readable.
+- Extract only fields clearly visible on the card. Never invent or guess missing values. Use null when not clearly readable or unsure.
 - Do not set interest, priority, owner, or notes.
 - Prefer the most prominent person name and company on the card.
-- Keep phone numbers and emails exactly as printed when readable.`;
+- Keep phone numbers and emails exactly as printed when readable.
+- All values must be string or null.`;
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            "Card reading is not configured. Ask an admin to set OPENAI_API_KEY.",
-        },
-        { status: 503 },
-      );
-    }
-
     if (isSupabaseConfigured()) {
       const supabase = await createClient();
       const {
@@ -38,38 +33,35 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const image = form.get("image");
-    if (!(image instanceof File) || image.size === 0) {
+    // Node/undici may yield Blob rather than File for multipart parts
+    if (!(image instanceof Blob) || image.size === 0) {
       return NextResponse.json(
         { error: "Please attach a business card image." },
         { status: 400 },
       );
     }
 
+    const geminiKey = process.env.GEMINI_API_KEY?.trim();
+    const openaiKey = process.env.OPENAI_API_KEY?.trim();
+
+    // Demo booth: mock extract only when no AI provider key is configured
+    if (!geminiKey && !openaiKey) {
+      return NextResponse.json({
+        extracted: mockExtractedContact(),
+        demo: true,
+      });
+    }
+
     const buffer = Buffer.from(await image.arrayBuffer());
-    const mime = image.type || "image/jpeg";
-    const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+    const mime =
+      (image.type && image.type !== "application/octet-stream"
+        ? image.type
+        : null) || "image/jpeg";
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract the business card fields as JSON.",
-            },
-            { type: "image_url", image_url: { url: dataUrl } },
-          ],
-        },
-      ],
-    });
+    const raw = geminiKey
+      ? await extractWithGemini(geminiKey, buffer, mime)
+      : await extractWithOpenAI(openaiKey!, buffer, mime);
 
-    const raw = completion.choices[0]?.message?.content;
     if (!raw) {
       return NextResponse.json(
         {
@@ -80,7 +72,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = JSON.parse(raw) as Partial<ExtractedBusinessCard>;
+    const parsed = JSON.parse(stripCodeFences(raw)) as Partial<ExtractedBusinessCard>;
     const extracted: ExtractedBusinessCard = {
       name: clean(parsed.name),
       company: clean(parsed.company),
@@ -89,7 +81,12 @@ export async function POST(request: Request) {
       email: clean(parsed.email),
     };
 
-    if (!extracted.name && !extracted.company && !extracted.email && !extracted.phone) {
+    if (
+      !extracted.name &&
+      !extracted.company &&
+      !extracted.email &&
+      !extracted.phone
+    ) {
       return NextResponse.json(
         {
           error:
@@ -111,6 +108,69 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+async function extractWithGemini(
+  apiKey: string,
+  buffer: Buffer,
+  mime: string,
+): Promise<string | null> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: SYSTEM,
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: mime,
+        data: buffer.toString("base64"),
+      },
+    },
+    { text: "Extract the business card fields as JSON." },
+  ]);
+
+  return result.response.text() || null;
+}
+
+async function extractWithOpenAI(
+  apiKey: string,
+  buffer: Buffer,
+  mime: string,
+): Promise<string | null> {
+  const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+  const openai = new OpenAI({ apiKey });
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Extract the business card fields as JSON.",
+          },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ],
+      },
+    ],
+  });
+
+  return completion.choices[0]?.message?.content ?? null;
+}
+
+function stripCodeFences(raw: string): string {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1].trim() : trimmed;
 }
 
 function clean(value: unknown): string | null {

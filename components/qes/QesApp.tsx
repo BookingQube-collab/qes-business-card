@@ -161,43 +161,56 @@ export function QesApp() {
     if (imageUrlRef.current?.startsWith("blob:")) {
       URL.revokeObjectURL(imageUrlRef.current);
     }
+    // Show preview immediately so shutter/upload never flashes back to idle
+    // while compression runs.
+    imageUrlRef.current = objectUrl;
+    cardFileRef.current = file;
+    setImageUrl(objectUrl);
+    setStep("preview");
+    setOcrError(null);
+
     try {
       const compressed = await compressCardImage(file);
+      if (imageUrlRef.current !== objectUrl) return;
       const url = URL.createObjectURL(compressed);
       URL.revokeObjectURL(objectUrl);
       imageUrlRef.current = url;
       cardFileRef.current = compressed;
       setImageUrl(url);
-      setStep("preview");
     } catch {
-      imageUrlRef.current = objectUrl;
-      cardFileRef.current = file;
-      setImageUrl(objectUrl);
-      setStep("preview");
+      // Keep the original capture if compression fails
     }
   }
 
   function handleRetake() {
     revokeImage();
+    setOcrError(null);
     setStep("pick");
   }
 
   function handleRemove() {
     revokeImage();
+    setOcrError(null);
     setStep("pick");
   }
 
   async function extractViaApi(file: File): Promise<ExtractedBusinessCard> {
     const body = new FormData();
-    body.append("image", file);
+    body.append("image", file, file.name || "business-card.jpg");
     const res = await fetch("/api/business-card/extract", {
       method: "POST",
       body,
     });
-    const json = (await res.json()) as {
+    let json: {
       extracted?: ExtractedBusinessCard;
       error?: string;
-    };
+      demo?: boolean;
+    } = {};
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      /* non-JSON body */
+    }
     if (!res.ok || !json.extracted) {
       throw new Error(
         json.error ||
@@ -215,8 +228,23 @@ export function QesApp() {
     try {
       let extracted: ExtractedBusinessCard;
 
-      if (api.mode === "supabase" && cardFileRef.current) {
-        extracted = await extractViaApi(cardFileRef.current);
+      if (cardFileRef.current) {
+        try {
+          extracted = await extractViaApi(cardFileRef.current);
+        } catch (apiErr) {
+          // API returns demo fields when no AI key is set; this is a safety
+          // net for older/misconfigured servers only.
+          const message =
+            apiErr instanceof Error ? apiErr.message : "";
+          if (/not configured|GEMINI_API_KEY|OPENAI_API_KEY/i.test(message)) {
+            await new Promise((r) =>
+              setTimeout(r, 400 + Math.floor(Math.random() * 201)),
+            );
+            extracted = mockExtractedContact();
+          } else {
+            throw apiErr;
+          }
+        }
       } else {
         await new Promise((r) =>
           setTimeout(r, 500 + Math.floor(Math.random() * 301)),
@@ -247,6 +275,7 @@ export function QesApp() {
           : "We could not read this card clearly. Please try another photo or enter details manually.";
       setOcrError(message);
       setToast(message);
+      // Keep captured image; open empty form for manual entry
       setFormValues({ ...EMPTY_LEAD_FORM });
       setStep("form");
     }
@@ -448,6 +477,7 @@ export function QesApp() {
             step={step}
             imageUrl={imageUrl}
             formValues={formValues}
+            ocrError={ocrError}
             onImageSelected={handleImageSelected}
             onRetake={handleRetake}
             onRemove={handleRemove}
@@ -475,7 +505,7 @@ export function QesApp() {
       </main>
 
       {ocrError && step === "form" ? (
-        <p className="sr-only" role="alert">
+        <p className="sr-only" role="status">
           {ocrError}
         </p>
       ) : null}

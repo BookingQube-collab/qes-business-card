@@ -91,6 +91,7 @@ export function CardImagePicker({
       video.onloadedmetadata = null;
     }
   }, [imageUrl, processing]);
+
   async function startCamera() {
     setCameraError(null);
 
@@ -119,8 +120,9 @@ export function CardImagePicker({
       if (!video) {
         stopMediaStream(stream);
         streamRef.current = null;
-        setCameraError(CAMERA_UNAVAILABLE);
         setCameraStarting(false);
+        // Video node missing — fall back to capture input
+        cameraFallbackInputRef.current?.click();
         return;
       }
       video.srcObject = stream;
@@ -157,6 +159,8 @@ export function CardImagePicker({
       setCameraLive(false);
       setCameraStarting(false);
       setCameraReady(false);
+      // Permission denied / no device — fall back to native capture picker
+      cameraFallbackInputRef.current?.click();
       setCameraError(CAMERA_UNAVAILABLE);
     }
   }
@@ -167,6 +171,7 @@ export function CardImagePicker({
     if (!video.videoWidth) {
       setCameraError(CAMERA_UNAVAILABLE);
       stopCamera();
+      cameraFallbackInputRef.current?.click();
       return;
     }
     setCapturing(true);
@@ -179,6 +184,7 @@ export function CardImagePicker({
     } catch {
       stopCamera();
       setCameraError(CAMERA_UNAVAILABLE);
+      cameraFallbackInputRef.current?.click();
     }
   }
 
@@ -186,6 +192,7 @@ export function CardImagePicker({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !file.type.startsWith("image/")) return;
+    stopCamera();
     setCameraError(null);
     onImageSelected(file, URL.createObjectURL(file));
   }
