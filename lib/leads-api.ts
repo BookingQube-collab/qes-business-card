@@ -1,13 +1,7 @@
-import { LocalLeadRepository, type LeadRepository } from "@/lib/leads-repository";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createLead as createLeadRemote } from "@/services/leads/createLead";
-import { findDuplicateLead as findDuplicateRemote } from "@/services/leads/findDuplicateLead";
-import { getLeads as getLeadsRemote, getLeadSignedUrl } from "@/services/leads/getLeads";
-import { updateLead as updateLeadRemote } from "@/services/leads/updateLead";
 import type { CreateLeadInput, Lead, UpdateLeadInput } from "@/types/lead";
 
 export type LeadApi = {
-  mode: "local" | "supabase";
+  mode: "supabase";
   getLeads(): Promise<Lead[]>;
   createLead(
     input: CreateLeadInput,
@@ -22,48 +16,88 @@ export type LeadApi = {
   getSignedCardUrl(path: string | null | undefined): Promise<string | null>;
 };
 
-let localRepo: LeadRepository | null = null;
-
-function getLocal(): LeadRepository {
-  if (!localRepo) localRepo = new LocalLeadRepository();
-  return localRepo;
-}
-
 export function getLeadApi(): LeadApi {
-  if (!isSupabaseConfigured()) {
-    const repo = getLocal();
-    return {
-      mode: "local",
-      getLeads: () => repo.getLeads(),
-      createLead: (input) => repo.createLead(input),
-      updateLead: (id, input) => repo.updateLead(id, input),
-      findDuplicate: async ({ email, phone, excludeId }) => {
-        const leads = await repo.getLeads();
-        const { normalizeEmail, normalizePhone } = await import(
-          "@/lib/lead-utils"
-        );
-        const e = normalizeEmail(email);
-        const p = normalizePhone(phone);
-        if (!e && !p) return null;
-        return (
-          leads.find((l) => {
-            if (excludeId && l.id === excludeId) return false;
-            if (e && normalizeEmail(l.email) === e) return true;
-            if (p && normalizePhone(l.phone) === p) return true;
-            return false;
-          }) ?? null
-        );
-      },
-      getSignedCardUrl: async (path) => path ?? null,
-    };
-  }
-
   return {
     mode: "supabase",
-    getLeads: () => getLeadsRemote(),
-    createLead: (input, options) => createLeadRemote(input, options),
-    updateLead: (id, input) => updateLeadRemote(id, input),
-    findDuplicate: (params) => findDuplicateRemote(params),
-    getSignedCardUrl: (path) => getLeadSignedUrl(path),
+    async getLeads() {
+      const res = await fetch("/api/leads", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as {
+        leads?: Lead[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Could not load leads");
+      return json.leads ?? [];
+    },
+    async createLead(input, options = {}) {
+      const body = new FormData();
+      body.append("payload", JSON.stringify(input));
+      if (options.id) body.append("id", options.id);
+      if (options.cardFile) {
+        body.append(
+          "card",
+          options.cardFile,
+          options.cardFile instanceof File
+            ? options.cardFile.name
+            : "card.webp",
+        );
+      }
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        body,
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        lead?: Lead;
+        error?: string;
+      };
+      if (!res.ok || !json.lead) {
+        throw new Error(json.error || "Could not save lead");
+      }
+      return json.lead;
+    },
+    async updateLead(id, input) {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(input),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        lead?: Lead;
+        error?: string;
+      };
+      if (!res.ok || !json.lead) {
+        throw new Error(json.error || "Could not update lead");
+      }
+      return json.lead;
+    },
+    async findDuplicate({ email, phone, excludeId }) {
+      const params = new URLSearchParams();
+      if (email) params.set("email", email);
+      if (phone) params.set("phone", phone);
+      if (excludeId) params.set("excludeId", excludeId);
+      const res = await fetch(`/api/leads/duplicate?${params}`, {
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        lead?: Lead | null;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Could not check duplicates");
+      return json.lead ?? null;
+    },
+    async getSignedCardUrl(path) {
+      if (!path) return null;
+      const params = new URLSearchParams({ path });
+      const res = await fetch(`/api/leads/signed-url?${params}`, {
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        url?: string | null;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Could not load card image");
+      return json.url ?? null;
+    },
   };
 }

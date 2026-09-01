@@ -62,7 +62,7 @@ export function LeadReport({
         </div>
 
         <p className="mt-2.5 text-[12.5px] text-slate-500">
-          Showing {leads.length} of {totalCount} cards on this device
+            Showing {leads.length} of {totalCount} cards from Supabase
         </p>
 
         <div className="mt-2.5">

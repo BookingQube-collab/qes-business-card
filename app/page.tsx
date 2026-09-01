@@ -24,12 +24,13 @@ export default async function Home() {
         data: { user },
       } = await supabase.auth.getUser();
       initialAuthed = Boolean(user);
-    } else {
-      const store = await cookies();
-      initialAuthed = isValidStaffSession(store.get(STAFF_COOKIE)?.value);
     }
   } catch {
     initialAuthed = false;
+  }
+  if (!initialAuthed) {
+    const store = await cookies();
+    initialAuthed = isValidStaffSession(store.get(STAFF_COOKIE)?.value);
   }
 
   return (

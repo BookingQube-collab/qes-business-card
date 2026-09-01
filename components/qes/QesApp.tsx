@@ -55,11 +55,9 @@ export function QesApp({
   supabaseAnonKey = "",
   initialAuthed = false,
 }: QesAppProps) {
-  const api = useMemo(() => {
-    setRuntimeSupabaseConfig(supabaseUrl, supabaseAnonKey);
-    return getLeadApi();
-  }, [supabaseUrl, supabaseAnonKey]);
-  const useSupabase = api.mode === "supabase";
+  setRuntimeSupabaseConfig(supabaseUrl, supabaseAnonKey);
+  const api = useMemo(() => getLeadApi(), []);
+  const useSupabase = Boolean(supabaseUrl && supabaseAnonKey);
 
   const [authReady, setAuthReady] = useState(true);
   const [authed, setAuthed] = useState(initialAuthed);
@@ -139,50 +137,71 @@ export function QesApp({
     };
   }, [authed]);
 
-  useEffect(() => {
-    if (!authed) return;
-    let cancelled = false;
-    api.getLeads().then((data) => {
-      if (!cancelled) {
-        setLeads(data);
-        setReady(true);
-      }
-    }).catch(async (err) => {
-      console.error(err);
-      if (cancelled) return;
-      const message = err instanceof Error ? err.message : "Could not load leads";
-      const needsLogin =
-        /not signed in/i.test(message) ||
-        /jwt/i.test(message) ||
-        /unauthorized/i.test(message);
-      const badApiKey = /invalid supabase api key|invalid api key/i.test(
-        message,
-      );
-      if (needsLogin || badApiKey) {
-        try {
-          if (api.mode === "supabase") {
-            await createClient().auth.signOut();
-          }
-        } catch {
-          // ignore sign-out failures while recovering
-        }
+  const reloadLeads = useCallback(async () => {
+    try {
+      const data = await api.getLeads();
+      setLeads(data);
+      setReady(true);
+      return data;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not load leads";
+      if (/unauthorized|not signed in/i.test(message)) {
         setAuthed(false);
         setReady(false);
         setLeads([]);
-        setToast(
-          badApiKey
-            ? "Supabase anon key misconfigured — fix .env.local and restart npm run dev"
-            : "Please sign in again",
-        );
-        return;
+        setToast("Please sign in again");
+        return [];
       }
-      setToast("Could not load leads");
+      setToast(message);
       setReady(true);
-    });
+      return [];
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (!authed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getLeads();
+        if (cancelled) return;
+        setLeads(data);
+        setReady(true);
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "Could not load leads";
+        if (/unauthorized|not signed in/i.test(message)) {
+          setAuthed(false);
+          setReady(false);
+          setLeads([]);
+          setToast("Please sign in again");
+          return;
+        }
+        setToast(message);
+        setReady(true);
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [api, authed]);
+
+  useEffect(() => {
+    if (!authed || view !== "report") return;
+    const timer = window.setInterval(() => {
+      void reloadLeads();
+    }, 15000);
+    function onFocus() {
+      void reloadLeads();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [authed, view, reloadLeads]);
 
   useEffect(() => {
     if (step === "form") {
@@ -355,11 +374,11 @@ export function QesApp({
     };
 
     try {
-      const created = await api.createLead(input, {
+      await api.createLead(input, {
         cardFile: cardFileRef.current,
         id: createId(),
       });
-      setLeads((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
+      await reloadLeads();
       setToast("Business card saved");
       imageUrlRef.current = null;
       cardFileRef.current = null;
@@ -444,7 +463,7 @@ export function QesApp({
         owner: editValues.owner as Owner,
         notes: editValues.notes.trim() || null,
       });
-      setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      await reloadLeads();
       setSelectedLead(updated);
       setEditing(false);
       setToast("Business card saved");
@@ -526,6 +545,7 @@ export function QesApp({
         onShowReport={() => {
           resetCapture();
           setView("report");
+          void reloadLeads();
         }}
         onShowCapture={() => {
           closeSheet();

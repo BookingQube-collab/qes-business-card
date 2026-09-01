@@ -17,7 +17,7 @@ export function LeadTable({ leads, onSelect }: LeadTableProps) {
   if (leads.length === 0) {
     return (
       <div className="hidden rounded-xl border border-[#e6e8ec] bg-white px-4 py-10 text-center text-sm text-slate-500 min-[900px]:block">
-        No leads match your filters.
+        No leads in the database yet. Scan a card to save one.
       </div>
     );
   }

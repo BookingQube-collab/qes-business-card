@@ -62,7 +62,7 @@ export function LeadMobileList({
   if (leads.length === 0) {
     return (
       <div className="rounded-xl border border-[#e6e8ec] bg-white px-4 py-10 text-center text-sm text-slate-500 min-[900px]:hidden">
-        No leads match your filters.
+        No leads in the database yet. Scan a card to save one.
       </div>
     );
   }

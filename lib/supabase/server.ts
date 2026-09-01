@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { requireSupabaseEnv } from "@/lib/supabase/env";
+import { getSupabaseUrl, requireSupabaseEnv } from "@/lib/supabase/env";
 
 export async function createClient() {
   const { url, anonKey } = requireSupabaseEnv();
@@ -26,13 +26,21 @@ export async function createClient() {
 }
 
 /** Service-role client for privileged server routes only. Never expose to browser. */
+export function hasSupabaseService() {
+  const url = getSupabaseUrl();
+  const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
+  return Boolean(url && serviceKey);
+}
+
 export function createServiceClient() {
-  const { url } = requireSupabaseEnv();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  const url = getSupabaseUrl();
+  const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
+  if (!url || !serviceKey) {
+    throw new Error(
+      "Supabase is not configured on the server. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+    );
   }
-  return createSupabaseClient(url, serviceKey, {
+  return createSupabaseClient(url.replace(/\/$/, ""), serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

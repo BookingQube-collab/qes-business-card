@@ -10,9 +10,9 @@ export async function isBoothAuthed(): Promise<boolean> {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      return Boolean(user);
+      if (user) return true;
     } catch {
-      return false;
+      // fall through to staff cookie
     }
   }
   const store = await cookies();
