@@ -51,10 +51,13 @@ export function CardImagePicker({
 
   const [cameraLive, setCameraLive] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const startGenRef = useRef(0);
 
   function stopCamera() {
+    startGenRef.current += 1;
     stopMediaStream(streamRef.current);
     streamRef.current = null;
     const video = videoRef.current;
@@ -63,22 +66,24 @@ export function CardImagePicker({
     }
     setCameraLive(false);
     setCameraStarting(false);
+    setCameraReady(false);
     setCapturing(false);
   }
 
   useEffect(() => {
     return () => {
+      startGenRef.current += 1;
       stopMediaStream(streamRef.current);
       streamRef.current = null;
     };
   }, []);
 
-  // Stop stream when leaving pick mode (preview / processing / unmount parent).
+  // Stop stream when leaving pick mode (preview / processing).
   useEffect(() => {
     if (imageUrl || processing) {
       stopCamera();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to image/processing
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to image/processing
   }, [imageUrl, processing]);
 
   async function startCamera() {
@@ -90,6 +95,7 @@ export function CardImagePicker({
     }
 
     stopCamera();
+    const gen = startGenRef.current;
     setCameraStarting(true);
 
     try {
@@ -97,6 +103,12 @@ export function CardImagePicker({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
       });
+
+      if (gen !== startGenRef.current) {
+        stopMediaStream(stream);
+        return;
+      }
+
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -109,25 +121,49 @@ export function CardImagePicker({
       video.srcObject = stream;
       video.setAttribute("playsinline", "true");
       video.muted = true;
+
+      const markReady = () => {
+        if (gen === startGenRef.current && video.videoWidth > 0) {
+          setCameraReady(true);
+        }
+      };
+      video.onloadedmetadata = markReady;
+      if (video.readyState >= 1) markReady();
+
       try {
         await video.play();
       } catch {
         /* autoplay policy — still show frame once metadata loads */
       }
+
+      if (gen !== startGenRef.current) {
+        stopMediaStream(stream);
+        streamRef.current = null;
+        return;
+      }
+
       setCameraLive(true);
       setCameraStarting(false);
+      markReady();
     } catch {
+      if (gen !== startGenRef.current) return;
       stopMediaStream(streamRef.current);
       streamRef.current = null;
       setCameraLive(false);
       setCameraStarting(false);
+      setCameraReady(false);
       setCameraError(CAMERA_UNAVAILABLE);
     }
   }
 
   async function handleShutter() {
     const video = videoRef.current;
-    if (!video || !streamRef.current || capturing) return;
+    if (!video || !streamRef.current || capturing || !cameraReady) return;
+    if (!video.videoWidth) {
+      setCameraError(CAMERA_UNAVAILABLE);
+      stopCamera();
+      return;
+    }
     setCapturing(true);
     setCameraError(null);
     try {
@@ -240,7 +276,7 @@ export function CardImagePicker({
               <div className="absolute bottom-3.5 left-3.5 z-[7] h-6 w-6 border-b-2 border-l-2 border-[#f0369b]" />
               <div className="absolute bottom-3.5 right-3.5 z-[7] h-6 w-6 border-b-2 border-r-2 border-[#ff8a3d]" />
 
-              <div className="absolute inset-x-0 bottom-3 z-[8] flex items-center justify-center gap-3 px-3">
+              <div className="absolute inset-x-0 bottom-2 z-[8] flex items-end justify-between gap-3 px-3 pb-1">
                 <button
                   type="button"
                   disabled={disabled || capturing}
@@ -253,13 +289,16 @@ export function CardImagePicker({
                 </button>
                 <button
                   type="button"
-                  disabled={disabled || capturing}
+                  disabled={disabled || capturing || !cameraReady}
                   onClick={() => void handleShutter()}
-                  className="qes-shutter-btn inline-flex min-h-14 min-w-14 items-center justify-center rounded-full disabled:opacity-50"
+                  className="qes-shutter-btn disabled:opacity-50"
                   aria-label="Capture photo"
                 >
-                  <span className="sr-only">Capture</span>
+                  <span className="qes-shutter-btn__ring" aria-hidden />
+                  <span className="qes-shutter-btn__core" aria-hidden />
+                  <span className="qes-shutter-btn__label qes-mono">Capture</span>
                 </button>
+                <div className="min-h-11 min-w-[4.5rem]" aria-hidden />
               </div>
             </>
           ) : showIdleViewfinder ? (
