@@ -1,5 +1,4 @@
 import { createId } from "@/lib/lead-utils";
-import { MOCK_LEADS } from "@/lib/mock-leads";
 import type {
   CreateLeadInput,
   Lead,
@@ -20,7 +19,7 @@ export interface LeadRepository {
 export class LocalLeadRepository implements LeadRepository {
   private leads: Lead[];
 
-  constructor(initial: Lead[] = MOCK_LEADS) {
+  constructor(initial: Lead[] = []) {
     this.leads = initial.map((l) => ({ ...l }));
   }
 

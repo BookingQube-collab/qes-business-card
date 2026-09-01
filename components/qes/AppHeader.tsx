@@ -1,28 +1,32 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, KeyRound, LogOut } from "lucide-react";
 import { APP_TITLE, BOOTH, EVENT_NAME } from "@/lib/constants";
 
 type AppHeaderProps = {
   view: "capture" | "report";
   leadCount: number;
+  geminiConfigured?: boolean;
   onShowReport: () => void;
   onShowCapture: () => void;
+  onOpenAdmin: () => void;
   onLogout?: () => void;
 };
 
 export function AppHeader({
   view,
   leadCount,
+  geminiConfigured = true,
   onShowReport,
   onShowCapture,
+  onOpenAdmin,
   onLogout,
 }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
       <div className="qes-header-accent w-full" />
       <div className="border-b border-[#191d29] bg-[#0c0e14]">
-        <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-3.5 px-4 py-3 sm:px-5">
+        <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <div
               className="qes-logo flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-bold"
@@ -63,13 +67,36 @@ export function AppHeader({
                 <span className="sm:hidden">Scanner</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={onOpenAdmin}
+              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[rgba(139,92,246,0.4)] bg-[linear-gradient(135deg,rgba(34,211,238,0.1),rgba(139,92,246,0.16))] px-3 text-[13px] font-semibold text-slate-100"
+              aria-label="Admin — Gemini API key"
+              title="Admin — Gemini API key"
+            >
+              <KeyRound className="h-4 w-4 text-cyan-300" aria-hidden />
+              <span className="hidden sm:inline">Admin</span>
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  geminiConfigured
+                    ? "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                    : "bg-pink-400 shadow-[0_0_8px_rgba(240,54,155,0.8)]"
+                }`}
+                aria-hidden
+              />
+            </button>
+
             {onLogout ? (
               <button
                 type="button"
                 onClick={onLogout}
-                className="inline-flex min-h-11 items-center rounded-[10px] border border-[#2a3040] bg-[#151824] px-3 text-[12px] font-semibold text-slate-400"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[rgba(240,54,155,0.4)] bg-[rgba(240,54,155,0.1)] px-3 text-[13px] font-semibold text-slate-100"
+                aria-label="Log out"
+                title="Log out"
               >
-                Log out
+                <LogOut className="h-4 w-4 text-pink-300" aria-hidden />
+                <span className="hidden sm:inline">Log out</span>
               </button>
             ) : null}
           </div>

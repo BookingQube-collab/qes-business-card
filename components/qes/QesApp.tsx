@@ -18,20 +18,18 @@ import {
 import { DuplicateDialog } from "@/components/qes/DuplicateDialog";
 import { LeadReport } from "@/components/qes/LeadReport";
 import { Toast } from "@/components/qes/Toast";
+import {
+  AdminPanel,
+  type GeminiKeyStatus,
+} from "@/components/qes/AdminPanel";
 import { DEFAULT_FILTERS } from "@/lib/constants";
 import {
   clearCaptureDraft,
-  loadCaptureDraft,
   saveCaptureDraft,
 } from "@/lib/capture-draft";
 import { compressCardImage } from "@/lib/compress-image";
 import { getLeadApi } from "@/lib/leads-api";
-import {
-  computeStats,
-  createId,
-  filterLeads,
-  mockExtractedContact,
-} from "@/lib/lead-utils";
+import { computeStats, createId, filterLeads } from "@/lib/lead-utils";
 import { createClient } from "@/lib/supabase/client";
 import { setRuntimeSupabaseConfig } from "@/lib/supabase/env";
 import type {
@@ -70,17 +68,11 @@ export function QesApp({
   const [leads, setLeads] = useState<Lead[]>([]);
   const [ready, setReady] = useState(false);
 
-  const [step, setStep] = useState<CaptureStep>(() => {
-    const draft = loadCaptureDraft();
-    return draft?.step === "form" ? "form" : "pick";
-  });
+  const [step, setStep] = useState<CaptureStep>("pick");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const imageUrlRef = useRef<string | null>(null);
   const cardFileRef = useRef<File | null>(null);
-  const [formValues, setFormValues] = useState<LeadFormValues>(() => {
-    const draft = loadCaptureDraft();
-    return draft?.formValues ?? EMPTY_LEAD_FORM;
-  });
+  const [formValues, setFormValues] = useState<LeadFormValues>(EMPTY_LEAD_FORM);
   const [saving, setSaving] = useState(false);
 
   const [filters, setFilters] = useState<LeadFilters>({ ...DEFAULT_FILTERS });
@@ -94,6 +86,10 @@ export function QesApp({
   const [duplicate, setDuplicate] = useState<Lead | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [geminiStatus, setGeminiStatus] = useState<GeminiKeyStatus | null>(
+    null,
+  );
   const readAbortRef = useRef(0);
 
   useEffect(() => {
@@ -121,6 +117,27 @@ export function QesApp({
       cancelled = true;
     };
   }, [useSupabase]);
+
+  useEffect(() => {
+    clearCaptureDraft();
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    let cancelled = false;
+    fetch("/api/admin/gemini", { credentials: "include" })
+      .then((res) => res.json())
+      .then((json: GeminiKeyStatus & { error?: string }) => {
+        if (cancelled || typeof json.configured !== "boolean") return;
+        setGeminiStatus(json);
+      })
+      .catch(() => {
+        /* status badge stays unknown */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
 
   useEffect(() => {
     if (!authed) return;
@@ -242,6 +259,7 @@ export function QesApp({
     const res = await fetch("/api/business-card/extract", {
       method: "POST",
       body,
+      credentials: "include",
     });
     let json: {
       extracted?: ExtractedBusinessCard;
@@ -252,6 +270,11 @@ export function QesApp({
       json = (await res.json()) as typeof json;
     } catch {
       /* non-JSON body */
+    }
+    if (json.demo) {
+      throw new Error(
+        "Set a Gemini API key in Admin before scanning cards.",
+      );
     }
     if (!res.ok || !json.extracted) {
       throw new Error(
@@ -268,31 +291,11 @@ export function QesApp({
     setOcrError(null);
 
     try {
-      let extracted: ExtractedBusinessCard;
-
-      if (cardFileRef.current) {
-        try {
-          extracted = await extractViaApi(cardFileRef.current);
-        } catch (apiErr) {
-          // API returns demo fields when no AI key is set; this is a safety
-          // net for older/misconfigured servers only.
-          const message =
-            apiErr instanceof Error ? apiErr.message : "";
-          if (/not configured|GEMINI_API_KEY|OPENAI_API_KEY/i.test(message)) {
-            await new Promise((r) =>
-              setTimeout(r, 400 + Math.floor(Math.random() * 201)),
-            );
-            extracted = mockExtractedContact();
-          } else {
-            throw apiErr;
-          }
-        }
-      } else {
-        await new Promise((r) =>
-          setTimeout(r, 500 + Math.floor(Math.random() * 301)),
-        );
-        extracted = mockExtractedContact();
+      if (!cardFileRef.current) {
+        throw new Error("Capture or upload a business card first.");
       }
+
+      const extracted = await extractViaApi(cardFileRef.current);
 
       if (token !== readAbortRef.current) return;
 
@@ -317,9 +320,11 @@ export function QesApp({
           : "We could not read this card clearly. Please try another photo or enter details manually.";
       setOcrError(message);
       setToast(message);
-      // Keep captured image; open empty form for manual entry
       setFormValues({ ...EMPTY_LEAD_FORM });
       setStep("form");
+      if (/gemini api key|admin/i.test(message)) {
+        setAdminOpen(true);
+      }
     }
   }
 
@@ -453,22 +458,28 @@ export function QesApp({
 
   async function handleLogout() {
     try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
       if (useSupabase) {
         await createClient().auth.signOut();
-      } else {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        });
       }
     } catch {
       // still clear local session
     }
+    setAdminOpen(false);
+    setGeminiStatus(null);
     setAuthed(false);
     setLeads([]);
     setReady(false);
     resetCapture();
   }
+
+  const handleGeminiStatus = useCallback((status: GeminiKeyStatus) => {
+    setGeminiStatus(status);
+  }, []);
+  const closeAdmin = useCallback(() => setAdminOpen(false), []);
 
   const dismissToast = useCallback(() => setToast(null), []);
 
@@ -511,6 +522,7 @@ export function QesApp({
       <AppHeader
         view={view}
         leadCount={stats.total}
+        geminiConfigured={geminiStatus?.configured ?? true}
         onShowReport={() => {
           resetCapture();
           setView("report");
@@ -519,6 +531,7 @@ export function QesApp({
           closeSheet();
           setView("capture");
         }}
+        onOpenAdmin={() => setAdminOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -604,6 +617,14 @@ export function QesApp({
       ) : null}
 
       <Toast message={toast} onDismiss={dismissToast} />
+
+      {adminOpen ? (
+        <AdminPanel
+          open
+          onClose={closeAdmin}
+          onStatus={handleGeminiStatus}
+        />
+      ) : null}
     </div>
   );
 }

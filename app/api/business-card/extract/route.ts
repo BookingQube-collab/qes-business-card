@@ -1,11 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { mockExtractedContact } from "@/lib/lead-utils";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { STAFF_COOKIE, isValidStaffSession } from "@/lib/staff-auth";
+import { isBoothAuthed } from "@/lib/booth-auth";
+import { resolveGeminiApiKey } from "@/lib/gemini-key";
 import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
@@ -23,19 +20,8 @@ Rules:
 
 export async function POST(request: Request) {
   try {
-    if (isSupabaseConfigured()) {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-    } else {
-      const store = await cookies();
-      if (!isValidStaffSession(store.get(STAFF_COOKIE)?.value)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+    if (!(await isBoothAuthed())) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const form = await request.formData();
@@ -48,15 +34,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const geminiKey = process.env.GEMINI_API_KEY?.trim();
+    const geminiKey = await resolveGeminiApiKey();
     const openaiKey = process.env.OPENAI_API_KEY?.trim();
 
-    // Demo booth: mock extract only when no AI provider key is configured
     if (!geminiKey && !openaiKey) {
-      return NextResponse.json({
-        extracted: mockExtractedContact(),
-        demo: true,
-      });
+      return NextResponse.json(
+        {
+          error:
+            "Set a Gemini API key in Admin before scanning cards. Do not use demo data.",
+        },
+        { status: 503 },
+      );
     }
 
     const buffer = Buffer.from(await image.arrayBuffer());
@@ -107,6 +95,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ extracted });
   } catch (err) {
     console.error("OCR extract failed", err);
+    const message = err instanceof Error ? err.message : "";
+    if (/api key|permission_denied|invalid.*key|quota/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Gemini key is invalid or blocked. Open Admin and paste a valid key.",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       {
         error:

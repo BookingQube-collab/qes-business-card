@@ -9,7 +9,7 @@ export function getStaffLogin() {
   };
 }
 
-function sessionSecret() {
+export function appSecret() {
   return (
     process.env.STAFF_PASSWORD?.trim() ||
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
@@ -18,7 +18,7 @@ function sessionSecret() {
 }
 
 export function staffSessionToken() {
-  return createHmac("sha256", sessionSecret())
+  return createHmac("sha256", appSecret())
     .update("qes-staff-ok")
     .digest("hex");
 }

@@ -181,17 +181,6 @@ export function createId(): string {
   return `lead-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Simulated OCR result for offline / missing OpenAI key. */
-export function mockExtractedContact() {
-  return {
-    name: "Ahmed Hassan",
-    company: "Qatar Events Group",
-    position: "Operations Manager",
-    phone: "+974 5555 1234",
-    email: "ahmed@company.com",
-  };
-}
-
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
