@@ -12,6 +12,7 @@ export type CaptureStep = "pick" | "preview" | "reading" | "form";
 
 type CaptureViewProps = {
   stats: LeadStats;
+  avgScanMs: number | null;
   step: CaptureStep;
   imageUrl: string | null;
   formValues: LeadFormValues;
@@ -48,6 +49,7 @@ function extractionStatus(step: CaptureStep): string {
 
 export function CaptureView({
   stats,
+  avgScanMs,
   step,
   imageUrl,
   formValues,
@@ -197,7 +199,7 @@ export function CaptureView({
           />
           <Kpi
             label="AVG SCAN TIME"
-            value="2.1s"
+            value={avgScanMs != null ? `${avgScanMs} ms` : "—"}
             valueClass="text-[34px] font-semibold text-[#a5f3fc]"
           />
         </div>

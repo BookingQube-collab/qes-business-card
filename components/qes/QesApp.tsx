@@ -90,6 +90,7 @@ export function QesApp({
   );
   const readAbortRef = useRef(0);
   const compressPromiseRef = useRef<Promise<File> | null>(null);
+  const [scanDurationsMs, setScanDurationsMs] = useState<number[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +234,11 @@ export function QesApp({
   }, [revokeImage]);
 
   const stats = useMemo(() => computeStats(leads), [leads]);
+  const avgScanMs = useMemo(() => {
+    if (scanDurationsMs.length === 0) return null;
+    const sum = scanDurationsMs.reduce((acc, ms) => acc + ms, 0);
+    return Math.round(sum / scanDurationsMs.length);
+  }, [scanDurationsMs]);
   const filteredLeads = useMemo(
     () => filterLeads(leads, filters),
     [leads, filters],
@@ -313,6 +319,7 @@ export function QesApp({
     const token = ++readAbortRef.current;
     setStep("reading");
     setOcrError(null);
+    const scanStart = performance.now();
 
     try {
       const pending = compressPromiseRef.current;
@@ -325,6 +332,11 @@ export function QesApp({
       const extracted = await extractViaApi(file);
 
       if (token !== readAbortRef.current) return;
+
+      setScanDurationsMs((prev) => [
+        ...prev,
+        Math.round(performance.now() - scanStart),
+      ]);
 
       setFormValues({
         ...EMPTY_LEAD_FORM,
@@ -567,6 +579,7 @@ export function QesApp({
         {view === "capture" ? (
           <CaptureView
             stats={stats}
+            avgScanMs={avgScanMs}
             step={step}
             imageUrl={imageUrl}
             formValues={formValues}
