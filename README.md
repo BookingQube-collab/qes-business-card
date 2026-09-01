@@ -32,7 +32,7 @@ npm run build
 2. Run migrations in the SQL editor (or Supabase CLI):
    - `supabase/migrations/001_create_leads.sql`
    - `supabase/migrations/002_storage_policies.sql`
-3. Auth → create staff users manually (email/password). Disable public signup.
+3. **Staff auth (required):** There is no public signup. In Supabase Dashboard → **Authentication → Users**, create each staff account with email/password. Optionally disable public sign-ups under Auth → Providers / URL configuration so only dashboard-created users can sign in.
 4. Confirm private Storage bucket `business-cards` exists with the policies from migration 002.
 
 ### 2. OCR (Gemini preferred)
