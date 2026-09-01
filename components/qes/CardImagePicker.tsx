@@ -549,23 +549,9 @@ export function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-/** Channel bar progress derived from capture step (+ timer while reading). */
+/** Channel bar progress derived from capture step (no artificial delays). */
 export function useScanChannels(step: "pick" | "preview" | "reading" | "form") {
-  const [readingPct, setReadingPct] = useState(18);
-
-  useEffect(() => {
-    if (step !== "reading") return;
-    const t0 = window.setTimeout(() => setReadingPct(18), 0);
-    const t1 = window.setTimeout(() => setReadingPct(55), 180);
-    const t2 = window.setTimeout(() => setReadingPct(88), 420);
-    return () => {
-      window.clearTimeout(t0);
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [step]);
-
   if (step === "form") return 100;
-  if (step === "reading") return readingPct;
+  if (step === "reading") return 92;
   return 0;
 }

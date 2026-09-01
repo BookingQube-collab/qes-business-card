@@ -6,7 +6,7 @@ import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
 
-const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-2.5-flash"];
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.6-flash"];
 
 const SYSTEM = `You extract contact fields from a photograph of a business card.
 Return ONLY valid JSON with keys: name, company, position, phone, email.

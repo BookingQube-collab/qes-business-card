@@ -89,6 +89,7 @@ export function QesApp({
     null,
   );
   const readAbortRef = useRef(0);
+  const compressPromiseRef = useRef<Promise<File> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,10 +217,12 @@ export function QesApp({
     imageUrlRef.current = null;
     setImageUrl(null);
     cardFileRef.current = null;
+    compressPromiseRef.current = null;
   }, []);
 
   const resetCapture = useCallback(() => {
     readAbortRef.current += 1;
+    compressPromiseRef.current = null;
     revokeImage();
     setFormValues(EMPTY_LEAD_FORM);
     setStep("pick");
@@ -247,17 +250,19 @@ export function QesApp({
     setStep("preview");
     setOcrError(null);
 
-    try {
-      const compressed = await compressCardImage(file);
-      if (imageUrlRef.current !== objectUrl) return;
-      const url = URL.createObjectURL(compressed);
-      URL.revokeObjectURL(objectUrl);
-      imageUrlRef.current = url;
-      cardFileRef.current = compressed;
-      setImageUrl(url);
-    } catch {
-      // Keep the original capture if compression fails
-    }
+    compressPromiseRef.current = compressCardImage(file)
+      .then((compressed) => {
+        if (imageUrlRef.current !== objectUrl) return file;
+        const url = URL.createObjectURL(compressed);
+        URL.revokeObjectURL(objectUrl);
+        imageUrlRef.current = url;
+        cardFileRef.current = compressed;
+        setImageUrl(url);
+        return compressed;
+      })
+      .catch(() => file);
+
+    void compressPromiseRef.current;
   }
 
   function handleRetake() {
@@ -310,11 +315,14 @@ export function QesApp({
     setOcrError(null);
 
     try {
-      if (!cardFileRef.current) {
+      const pending = compressPromiseRef.current;
+      const file = pending ? await pending : cardFileRef.current;
+      if (!file) {
         throw new Error("Capture or upload a business card first.");
       }
+      cardFileRef.current = file;
 
-      const extracted = await extractViaApi(cardFileRef.current);
+      const extracted = await extractViaApi(file);
 
       if (token !== readAbortRef.current) return;
 
