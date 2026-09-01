@@ -63,6 +63,7 @@ export function CardImagePicker({
     const video = videoRef.current;
     if (video) {
       video.srcObject = null;
+      video.onloadedmetadata = null;
     }
     setCameraLive(false);
     setCameraStarting(false);
@@ -78,14 +79,18 @@ export function CardImagePicker({
     };
   }, []);
 
-  // Stop stream when leaving pick mode (preview / processing).
+  // Hardware teardown only when preview/processing owns the viewfinder.
   useEffect(() => {
-    if (imageUrl || processing) {
-      stopCamera();
+    if (!imageUrl && !processing) return;
+    startGenRef.current += 1;
+    stopMediaStream(streamRef.current);
+    streamRef.current = null;
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = null;
+      video.onloadedmetadata = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to image/processing
   }, [imageUrl, processing]);
-
   async function startCamera() {
     setCameraError(null);
 
