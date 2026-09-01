@@ -1,4 +1,4 @@
-function trimEnv(value: string | undefined): string | undefined {
+function trimEnv(value: string | undefined | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
@@ -19,16 +19,45 @@ function decodeJwtPayload(jwt: string): { role?: string } | null {
   }
 }
 
-export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    trimEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-      trimEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+/** Dynamic key so Next.js does not inline NEXT_PUBLIC_ values at build time. */
+function readEnv(name: string): string | undefined {
+  return trimEnv(process.env[name]);
+}
+
+let runtimeUrl: string | undefined;
+let runtimeAnonKey: string | undefined;
+
+export function setRuntimeSupabaseConfig(
+  url?: string | null,
+  anonKey?: string | null,
+) {
+  runtimeUrl = trimEnv(url);
+  runtimeAnonKey = trimEnv(anonKey);
+}
+
+export function getSupabaseUrl(): string | undefined {
+  return (
+    runtimeUrl ||
+    readEnv("NEXT_PUBLIC_SUPABASE_URL") ||
+    readEnv("SUPABASE_URL")
   );
 }
 
+export function getSupabaseAnonKey(): string | undefined {
+  return (
+    runtimeAnonKey ||
+    readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
+    readEnv("SUPABASE_ANON_KEY")
+  );
+}
+
+export function isSupabaseConfigured(): boolean {
+  return Boolean(getSupabaseUrl() && getSupabaseAnonKey());
+}
+
 export function requireSupabaseEnv() {
-  const url = trimEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const anonKey = trimEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
   if (!url || !anonKey) {
     throw new Error(
       "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY",

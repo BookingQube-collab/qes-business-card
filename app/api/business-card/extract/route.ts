@@ -1,9 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { mockExtractedContact } from "@/lib/lead-utils";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { STAFF_COOKIE, isValidStaffSession } from "@/lib/staff-auth";
 import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
@@ -27,6 +29,11 @@ export async function POST(request: Request) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    } else {
+      const store = await cookies();
+      if (!isValidStaffSession(store.get(STAFF_COOKIE)?.value)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }

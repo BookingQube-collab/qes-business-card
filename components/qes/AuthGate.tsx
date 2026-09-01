@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 
 type AuthGateProps = {
   onAuthed: () => void;
+  useSupabase: boolean;
 };
 
-export function AuthGate({ onAuthed }: AuthGateProps) {
+export function AuthGate({ onAuthed, useSupabase }: AuthGateProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,14 +19,30 @@ export function AuthGate({ onAuthed }: AuthGateProps) {
     setError(null);
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { error: signError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (signError) {
-        setError(signError.message || "Sign-in failed");
-        return;
+      if (useSupabase) {
+        const supabase = createClient();
+        const { error: signError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (signError) {
+          setError(signError.message || "Sign-in failed");
+          return;
+        }
+      } else {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!res.ok) {
+          setError(json.error || "Sign-in failed");
+          return;
+        }
       }
       onAuthed();
     } catch (err) {

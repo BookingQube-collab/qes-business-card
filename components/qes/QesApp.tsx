@@ -33,6 +33,7 @@ import {
   mockExtractedContact,
 } from "@/lib/lead-utils";
 import { createClient } from "@/lib/supabase/client";
+import { setRuntimeSupabaseConfig } from "@/lib/supabase/env";
 import type {
   CreateLeadInput,
   Interest,
@@ -45,12 +46,25 @@ import type { ExtractedBusinessCard } from "@/types/ocr";
 
 type AppView = "capture" | "report";
 
-export function QesApp() {
-  const api = useMemo(() => getLeadApi(), []);
-  const needsAuth = api.mode === "supabase";
+type QesAppProps = {
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  initialAuthed?: boolean;
+};
 
-  const [authReady, setAuthReady] = useState(!needsAuth);
-  const [authed, setAuthed] = useState(!needsAuth);
+export function QesApp({
+  supabaseUrl = "",
+  supabaseAnonKey = "",
+  initialAuthed = false,
+}: QesAppProps) {
+  const api = useMemo(() => {
+    setRuntimeSupabaseConfig(supabaseUrl, supabaseAnonKey);
+    return getLeadApi();
+  }, [supabaseUrl, supabaseAnonKey]);
+  const useSupabase = api.mode === "supabase";
+
+  const [authReady, setAuthReady] = useState(true);
+  const [authed, setAuthed] = useState(initialAuthed);
 
   const [view, setView] = useState<AppView>("capture");
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -83,27 +97,30 @@ export function QesApp() {
   const readAbortRef = useRef(0);
 
   useEffect(() => {
-    if (!needsAuth) return;
     let cancelled = false;
     (async () => {
       try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getSession();
-        if (!cancelled) {
-          setAuthed(Boolean(data.session));
-          setAuthReady(true);
+        if (useSupabase) {
+          const supabase = createClient();
+          const { data } = await supabase.auth.getSession();
+          if (!cancelled) setAuthed(Boolean(data.session));
+        } else {
+          const res = await fetch("/api/auth/session", {
+            credentials: "include",
+          });
+          const json = (await res.json()) as { authed?: boolean };
+          if (!cancelled) setAuthed(Boolean(json.authed));
         }
       } catch {
-        if (!cancelled) {
-          setAuthed(false);
-          setAuthReady(true);
-        }
+        if (!cancelled) setAuthed(false);
+      } finally {
+        if (!cancelled) setAuthReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [needsAuth]);
+  }, [useSupabase]);
 
   useEffect(() => {
     if (!authed) return;
@@ -435,9 +452,18 @@ export function QesApp() {
   }
 
   async function handleLogout() {
-    if (api.mode !== "supabase") return;
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      if (useSupabase) {
+        await createClient().auth.signOut();
+      } else {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      }
+    } catch {
+      // still clear local session
+    }
     setAuthed(false);
     setLeads([]);
     setReady(false);
@@ -446,7 +472,7 @@ export function QesApp() {
 
   const dismissToast = useCallback(() => setToast(null), []);
 
-  if (needsAuth && !authReady) {
+  if (!authReady) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#0b0c11] text-sm text-slate-400">
         Loading…
@@ -454,9 +480,10 @@ export function QesApp() {
     );
   }
 
-  if (needsAuth && !authed) {
+  if (!authed) {
     return (
       <AuthGate
+        useSupabase={useSupabase}
         onAuthed={() => {
           setAuthed(true);
           setReady(false);
@@ -492,7 +519,7 @@ export function QesApp() {
           closeSheet();
           setView("capture");
         }}
-        onLogout={api.mode === "supabase" ? handleLogout : undefined}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
