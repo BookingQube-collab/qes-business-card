@@ -28,7 +28,7 @@ import {
   saveCaptureDraft,
 } from "@/lib/capture-draft";
 import { compressCardImage } from "@/lib/compress-image";
-import { getLeadApi } from "@/lib/leads-api";
+import { getLeadApi, LeadApiError } from "@/lib/leads-api";
 import { computeStats, createId, filterLeads } from "@/lib/lead-utils";
 import { createClient } from "@/lib/supabase/client";
 import { setRuntimeSupabaseConfig } from "@/lib/supabase/env";
@@ -433,7 +433,24 @@ export function QesApp({
       await persistLead();
     } catch (err) {
       console.error(err);
-      setToast("Could not check duplicates — try again");
+      const message = err instanceof Error ? err.message : "";
+      const status = err instanceof LeadApiError ? err.status : 0;
+
+      if (status === 401 || /unauthorized/i.test(message)) {
+        setAuthed(false);
+        setToast("Please sign in again");
+        return;
+      }
+      if (status === 503 || /not configured/i.test(message)) {
+        setToast(
+          message ||
+            "Leads storage is not configured on the server. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.",
+        );
+        return;
+      }
+
+      setToast("Could not verify duplicates — saving anyway");
+      await persistLead();
     }
   }
 

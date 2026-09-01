@@ -1,5 +1,26 @@
 import type { CreateLeadInput, Lead, UpdateLeadInput } from "@/types/lead";
 
+export class LeadApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "LeadApiError";
+    this.status = status;
+  }
+}
+
+async function parseLeadResponse<T>(
+  res: Response,
+  fallback: string,
+): Promise<T & { error?: string }> {
+  const json = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) {
+    throw new LeadApiError(json.error || fallback, res.status);
+  }
+  return json;
+}
+
 export type LeadApi = {
   mode: "supabase";
   getLeads(): Promise<Lead[]>;
@@ -21,11 +42,10 @@ export function getLeadApi(): LeadApi {
     mode: "supabase",
     async getLeads() {
       const res = await fetch("/api/leads", { credentials: "include" });
-      const json = (await res.json().catch(() => ({}))) as {
-        leads?: Lead[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error || "Could not load leads");
+      const json = await parseLeadResponse<{ leads?: Lead[] }>(
+        res,
+        "Could not load leads",
+      );
       return json.leads ?? [];
     },
     async createLead(input, options = {}) {
@@ -46,12 +66,12 @@ export function getLeadApi(): LeadApi {
         body,
         credentials: "include",
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        lead?: Lead;
-        error?: string;
-      };
-      if (!res.ok || !json.lead) {
-        throw new Error(json.error || "Could not save lead");
+      const json = await parseLeadResponse<{ lead?: Lead }>(
+        res,
+        "Could not save lead",
+      );
+      if (!json.lead) {
+        throw new LeadApiError("Could not save lead", res.status);
       }
       return json.lead;
     },
@@ -62,28 +82,27 @@ export function getLeadApi(): LeadApi {
         credentials: "include",
         body: JSON.stringify(input),
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        lead?: Lead;
-        error?: string;
-      };
-      if (!res.ok || !json.lead) {
-        throw new Error(json.error || "Could not update lead");
+      const json = await parseLeadResponse<{ lead?: Lead }>(
+        res,
+        "Could not update lead",
+      );
+      if (!json.lead) {
+        throw new LeadApiError("Could not update lead", res.status);
       }
       return json.lead;
     },
     async findDuplicate({ email, phone, excludeId }) {
       const params = new URLSearchParams();
-      if (email) params.set("email", email);
-      if (phone) params.set("phone", phone);
+      if (email?.trim()) params.set("email", email.trim());
+      if (phone?.trim()) params.set("phone", phone.trim());
       if (excludeId) params.set("excludeId", excludeId);
       const res = await fetch(`/api/leads/duplicate?${params}`, {
         credentials: "include",
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        lead?: Lead | null;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error || "Could not check duplicates");
+      const json = await parseLeadResponse<{ lead?: Lead | null }>(
+        res,
+        "Could not check duplicates",
+      );
       return json.lead ?? null;
     },
     async getSignedCardUrl(path) {
@@ -92,11 +111,10 @@ export function getLeadApi(): LeadApi {
       const res = await fetch(`/api/leads/signed-url?${params}`, {
         credentials: "include",
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        url?: string | null;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error || "Could not load card image");
+      const json = await parseLeadResponse<{ url?: string | null }>(
+        res,
+        "Could not load card image",
+      );
       return json.url ?? null;
     },
   };

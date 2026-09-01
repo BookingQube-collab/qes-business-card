@@ -32,6 +32,16 @@ export async function dbGetLeads(limit = 400): Promise<Lead[]> {
   return ((data ?? []) as LeadRow[]).map(mapLeadRow);
 }
 
+function matchesDuplicate(
+  lead: Lead,
+  params: { email: string; phone: string; excludeId?: string },
+): boolean {
+  if (params.excludeId && lead.id === params.excludeId) return false;
+  if (params.email && normalizeEmail(lead.email) === params.email) return true;
+  if (params.phone && normalizePhone(lead.phone) === params.phone) return true;
+  return false;
+}
+
 export async function dbFindDuplicate(params: {
   email?: string | null;
   phone?: string | null;
@@ -41,15 +51,37 @@ export async function dbFindDuplicate(params: {
   const phone = normalizePhone(params.phone);
   if (!email && !phone) return null;
 
-  const leads = await dbGetLeads();
-  return (
-    leads.find((lead) => {
-      if (params.excludeId && lead.id === params.excludeId) return false;
-      if (email && normalizeEmail(lead.email) === email) return true;
-      if (phone && normalizePhone(lead.phone) === phone) return true;
-      return false;
-    }) ?? null
-  );
+  assertSupabaseService();
+  const supabase = createServiceClient();
+
+  if (email) {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .ilike("email", email)
+      .limit(20);
+    if (error) throw new Error(error.message);
+    const match = ((data ?? []) as LeadRow[])
+      .map(mapLeadRow)
+      .find((lead) => matchesDuplicate(lead, { email, phone, excludeId: params.excludeId }));
+    if (match) return match;
+  }
+
+  if (phone) {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .not("phone", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw new Error(error.message);
+    const match = ((data ?? []) as LeadRow[])
+      .map(mapLeadRow)
+      .find((lead) => matchesDuplicate(lead, { email, phone, excludeId: params.excludeId }));
+    if (match) return match;
+  }
+
+  return null;
 }
 
 export async function dbCreateLead(
