@@ -113,12 +113,37 @@ export function QesApp() {
         setLeads(data);
         setReady(true);
       }
-    }).catch((err) => {
+    }).catch(async (err) => {
       console.error(err);
-      if (!cancelled) {
-        setToast("Could not load leads");
-        setReady(true);
+      if (cancelled) return;
+      const message = err instanceof Error ? err.message : "Could not load leads";
+      const needsLogin =
+        /not signed in/i.test(message) ||
+        /jwt/i.test(message) ||
+        /unauthorized/i.test(message);
+      const badApiKey = /invalid supabase api key|invalid api key/i.test(
+        message,
+      );
+      if (needsLogin || badApiKey) {
+        try {
+          if (api.mode === "supabase") {
+            await createClient().auth.signOut();
+          }
+        } catch {
+          // ignore sign-out failures while recovering
+        }
+        setAuthed(false);
+        setReady(false);
+        setLeads([]);
+        setToast(
+          badApiKey
+            ? "Supabase anon key misconfigured — fix .env.local and restart npm run dev"
+            : "Please sign in again",
+        );
+        return;
       }
+      setToast("Could not load leads");
+      setReady(true);
     });
     return () => {
       cancelled = true;
