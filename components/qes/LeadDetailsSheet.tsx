@@ -4,6 +4,10 @@ import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { LeadForm, type LeadFormValues } from "@/components/qes/LeadForm";
 import { PriorityBadge } from "@/components/qes/PriorityBadge";
+import {
+  parseInterestOther,
+  stripInterestOtherFromNotes,
+} from "@/lib/lead-form-utils";
 import { formatFullDateTime } from "@/lib/lead-utils";
 import type { Lead } from "@/types/lead";
 
@@ -30,9 +34,9 @@ export function leadToFormValues(lead: Lead): LeadFormValues {
     phone: lead.phone ?? "",
     email: lead.email ?? "",
     interest: lead.interest,
+    interestOther: parseInterestOther(lead.interest, lead.notes),
     priority: lead.priority,
-    owner: lead.owner,
-    notes: lead.notes ?? "",
+    notes: stripInterestOtherFromNotes(lead.interest, lead.notes),
   };
 }
 
@@ -162,15 +166,22 @@ export function LeadDetailsSheet({
                   )
                 }
               />
-              <Detail label="Interest" value={lead.interest} />
+              <Detail
+                label="Interest"
+                value={
+                  lead.interest === "Other"
+                    ? parseInterestOther(lead.interest, lead.notes) ||
+                      lead.interest
+                    : lead.interest
+                }
+              />
               <div>
                 <dt className="text-xs font-medium text-[#64748b]">Priority</dt>
                 <dd className="mt-1">
                   <PriorityBadge priority={lead.priority} />
                 </dd>
               </div>
-              <Detail label="Owner" value={lead.owner} />
-              <Detail label="Notes" value={lead.notes ?? "—"} />
+              <Detail label="Notes" value={stripInterestOtherFromNotes(lead.interest, lead.notes) || "—"} />
               <Detail
                 label="Created"
                 value={formatFullDateTime(lead.created_at)}

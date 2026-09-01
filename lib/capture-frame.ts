@@ -45,8 +45,8 @@ export function enhanceCanvasForOcr(
 ): void {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
-  const contrast = 1.14;
-  const brightness = 8;
+  const contrast = 1.18;
+  const brightness = 6;
 
   for (let i = 0; i < data.length; i += 4) {
     for (let c = 0; c < 3; c += 1) {
@@ -104,8 +104,9 @@ export async function captureVideoFrame(
     throw new Error("Canvas unavailable");
   }
   ctx.drawImage(video, 0, 0, width, height);
+  enhanceCanvasForOcr(ctx, width, height);
 
-  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.88);
+  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.92);
   if (jpeg && jpeg.size > 0) {
     return new File([jpeg], `${filenameBase}.jpg`, {
       type: "image/jpeg",
@@ -113,7 +114,7 @@ export async function captureVideoFrame(
     });
   }
 
-  const webp = await canvasToBlob(canvas, "image/webp", 0.88);
+  const webp = await canvasToBlob(canvas, "image/webp", 0.92);
   if (webp && webp.size > 0) {
     return new File([webp], `${filenameBase}.webp`, {
       type: "image/webp",

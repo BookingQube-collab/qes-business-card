@@ -2,15 +2,15 @@ import { enhanceCanvasForOcr } from "@/lib/capture-frame";
 
 /**
  * Client-side image compression for booth uploads.
- * Max edge 1920px, JPEG ~0.85 — fast upload with readable text.
+ * Max edge 2400px, JPEG ~0.92 — keeps small email/phone text readable for OCR.
  */
 export async function compressCardImage(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
-  const maxEdge = 1920;
+  const maxEdge = 2400;
   const maxDim = Math.max(bitmap.width, bitmap.height);
   const skipReencode =
-    maxDim <= maxEdge &&
-    file.size <= 1.2 * 1024 * 1024 &&
+    maxDim <= 1600 &&
+    file.size <= 800 * 1024 &&
     (file.type === "image/jpeg" || file.type === "image/webp");
 
   if (skipReencode) {
@@ -34,7 +34,7 @@ export async function compressCardImage(file: File): Promise<File> {
   bitmap.close();
   enhanceCanvasForOcr(ctx, width, height);
 
-  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.85);
+  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.92);
   if (jpeg && jpeg.size > 0) {
     return new File([jpeg], replaceExt(file.name, "jpg"), {
       type: "image/jpeg",
@@ -42,7 +42,7 @@ export async function compressCardImage(file: File): Promise<File> {
     });
   }
 
-  const webp = await canvasToBlob(canvas, "image/webp", 0.85);
+  const webp = await canvasToBlob(canvas, "image/webp", 0.92);
   if (webp && webp.size > 0) {
     return new File([webp], replaceExt(file.name, "webp"), {
       type: "image/webp",

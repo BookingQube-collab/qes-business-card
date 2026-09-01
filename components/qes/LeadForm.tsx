@@ -1,8 +1,8 @@
 "use client";
 
-import { INTERESTS, OWNERS, PRIORITIES } from "@/lib/constants";
+import { INTERESTS, PRIORITIES } from "@/lib/constants";
 import { priorityClass } from "@/lib/lead-utils";
-import type { Interest, Owner, Priority } from "@/types/lead";
+import type { Interest, Priority } from "@/types/lead";
 
 export type LeadFormValues = {
   name: string;
@@ -11,8 +11,8 @@ export type LeadFormValues = {
   phone: string;
   email: string;
   interest: Interest | "";
+  interestOther: string;
   priority: Priority | "";
-  owner: Owner | "";
   notes: string;
 };
 
@@ -32,8 +32,8 @@ export const EMPTY_LEAD_FORM: LeadFormValues = {
   phone: "",
   email: "",
   interest: "",
+  interestOther: "",
   priority: "",
-  owner: "",
   notes: "",
 };
 
@@ -61,12 +61,13 @@ export function LeadForm({
     onChange({ ...values, [key]: value });
   }
 
+  const otherSelected = values.interest === "Other";
   const canSave =
     values.name.trim() &&
     values.company.trim() &&
     values.interest &&
     values.priority &&
-    values.owner;
+    (!otherSelected || values.interestOther.trim());
 
   return (
     <form
@@ -146,7 +147,14 @@ export function LeadForm({
                 key={interest}
                 type="button"
                 disabled={disabled}
-                onClick={() => setField("interest", interest)}
+                onClick={() =>
+                  onChange({
+                    ...values,
+                    interest,
+                    interestOther:
+                      interest === "Other" ? values.interestOther : "",
+                  })
+                }
                 className={`inline-flex min-h-11 items-center rounded-xl border px-3 text-sm font-medium transition-colors ${
                   selected
                     ? dark
@@ -162,6 +170,22 @@ export function LeadForm({
             );
           })}
         </div>
+        {otherSelected ? (
+          <Field
+            label="Describe interest"
+            htmlFor="lead-interest-other"
+            labelClass={labelClass}
+          >
+            <input
+              id="lead-interest-other"
+              className={inputClass}
+              value={values.interestOther}
+              onChange={(e) => setField("interestOther", e.target.value)}
+              placeholder="What are they interested in?"
+              required
+            />
+          </Field>
+        ) : null}
       </fieldset>
 
       <fieldset className="space-y-2">
@@ -189,25 +213,6 @@ export function LeadForm({
           })}
         </div>
       </fieldset>
-
-      <Field label="Owner" htmlFor="lead-owner" labelClass={labelClass}>
-        <select
-          id="lead-owner"
-          className={inputClass}
-          value={values.owner}
-          onChange={(e) => setField("owner", e.target.value as Owner | "")}
-          required
-        >
-          <option value="" disabled>
-            Select owner
-          </option>
-          {OWNERS.map((owner) => (
-            <option key={owner} value={owner}>
-              {owner}
-            </option>
-          ))}
-        </select>
-      </Field>
 
       <Field
         label="Notes"

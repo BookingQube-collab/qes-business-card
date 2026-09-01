@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { isBoothAuthed } from "@/lib/booth-auth";
 import { resolveGeminiApiKey } from "@/lib/gemini-key";
+import { normalizeOcrEmail } from "@/lib/ocr-email";
 import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
@@ -16,8 +17,10 @@ Rules:
 - Prefer the most prominent person name and company on the card.
 - Copy company names in full, including short prefixes or acronyms at the start (e.g. "E3 Events & Entertainment Enterprises", not "Events & Entertainment Enterprises").
 - For phone: transcribe the printed mobile/telephone number exactly, including country codes (+974, +971, etc.), spaces, and dashes as shown.
-- For email: transcribe the printed email address exactly. It must look like a valid email (user@domain.tld). Do not confuse similar letters (l/I/1, O/0) — re-read blurry characters carefully.
-- If multiple phones or emails appear, prefer the one labeled mobile/cell/direct or the most prominent contact line.
+- For email: locate the line with an @ symbol or labels like "E:", "Email", or an envelope icon. Transcribe each character exactly — do not infer or autocomplete domains.
+- Common OCR traps: l vs I vs 1, O vs 0, rn vs m, missing dots, comma instead of dot in the domain, spaces inside the address. Re-read uncertain characters; if any character is unclear, set email to null rather than guess.
+- Email must be user@domain.tld with no spaces. Lowercase the domain only. Do not include "mailto:", "www.", or surrounding punctuation.
+- If multiple emails appear, prefer the one labeled email/e-mail or the primary business contact line (not generic info@ unless it is the only address).
 - All values must be string or null.`;
 
 export async function POST(request: Request) {
@@ -83,7 +86,7 @@ export async function POST(request: Request) {
       company: clean(parsed.company),
       position: clean(parsed.position),
       phone: clean(parsed.phone),
-      email: clean(parsed.email),
+      email: normalizeOcrEmail(clean(parsed.email)),
     };
 
     if (

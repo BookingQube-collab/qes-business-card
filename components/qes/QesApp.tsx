@@ -22,14 +22,16 @@ import {
   AdminPanel,
   type GeminiKeyStatus,
 } from "@/components/qes/AdminPanel";
-import { DEFAULT_FILTERS } from "@/lib/constants";
+import { DEFAULT_FILTERS, DEFAULT_OWNER } from "@/lib/constants";
 import {
   clearCaptureDraft,
   saveCaptureDraft,
 } from "@/lib/capture-draft";
 import { compressCardImage } from "@/lib/compress-image";
 import { getLeadApi, LeadApiError } from "@/lib/leads-api";
+import { buildLeadNotes } from "@/lib/lead-form-utils";
 import { computeStats, createId, filterLeads } from "@/lib/lead-utils";
+import { normalizeOcrEmail } from "@/lib/ocr-email";
 import { createClient } from "@/lib/supabase/client";
 import { setRuntimeSupabaseConfig } from "@/lib/supabase/env";
 import type {
@@ -37,7 +39,6 @@ import type {
   Interest,
   Lead,
   LeadFilters,
-  Owner,
   Priority,
 } from "@/types/lead";
 import type { ExtractedBusinessCard } from "@/types/ocr";
@@ -344,10 +345,10 @@ export function QesApp({
         company: extracted.company ?? "",
         position: extracted.position ?? "",
         phone: extracted.phone ?? "",
-        email: extracted.email ?? "",
+        email: normalizeOcrEmail(extracted.email) ?? "",
         interest: "",
+        interestOther: "",
         priority: "",
-        owner: "",
         notes: "",
       });
       setStep("form");
@@ -373,7 +374,7 @@ export function QesApp({
       !formValues.company.trim() ||
       !formValues.interest ||
       !formValues.priority ||
-      !formValues.owner
+      (formValues.interest === "Other" && !formValues.interestOther.trim())
     ) {
       setToast("Please complete required fields");
       return;
@@ -388,8 +389,8 @@ export function QesApp({
       email: formValues.email.trim() || null,
       interest: formValues.interest as Interest,
       priority: formValues.priority as Priority,
-      owner: formValues.owner as Owner,
-      notes: formValues.notes.trim() || null,
+      owner: DEFAULT_OWNER,
+      notes: buildLeadNotes(formValues),
       business_card_image: null,
     };
 
@@ -482,7 +483,7 @@ export function QesApp({
       !editValues.company.trim() ||
       !editValues.interest ||
       !editValues.priority ||
-      !editValues.owner
+      (editValues.interest === "Other" && !editValues.interestOther.trim())
     ) {
       return;
     }
@@ -497,8 +498,7 @@ export function QesApp({
         email: editValues.email.trim() || null,
         interest: editValues.interest as Interest,
         priority: editValues.priority as Priority,
-        owner: editValues.owner as Owner,
-        notes: editValues.notes.trim() || null,
+        notes: buildLeadNotes(editValues),
       });
       await reloadLeads();
       setSelectedLead(updated);

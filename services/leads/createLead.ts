@@ -1,3 +1,4 @@
+import { DEFAULT_OWNER } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { createId } from "@/lib/lead-utils";
 import { mapLeadRow, type LeadRow } from "@/services/leads/types";
@@ -50,7 +51,7 @@ export async function createLead(
       email: input.email,
       interest: input.interest,
       priority: input.priority,
-      owner: input.owner,
+      owner: input.owner ?? DEFAULT_OWNER,
       notes: input.notes,
       business_card_image: imagePath,
     })

@@ -1,8 +1,8 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { INTERESTS, OWNERS, PRIORITIES } from "@/lib/constants";
-import type { Interest, LeadFilters, Owner, Priority } from "@/types/lead";
+import { INTERESTS, PRIORITIES } from "@/lib/constants";
+import type { Interest, LeadFilters, Priority } from "@/types/lead";
 
 type LeadFiltersProps = {
   filters: LeadFilters;
@@ -19,7 +19,6 @@ export function LeadFiltersBar({
     filters.search.trim() !== "" ||
     filters.priority !== "All" ||
     filters.interest !== "All" ||
-    filters.owner !== "All" ||
     filters.date !== "All";
 
   return (
@@ -54,12 +53,6 @@ export function LeadFiltersBar({
           onChange({ ...filters, interest: v as Interest | "All" })
         }
         options={["All", ...INTERESTS]}
-      />
-      <FilterSelect
-        label="Owner"
-        value={filters.owner}
-        onChange={(v) => onChange({ ...filters, owner: v as Owner | "All" })}
-        options={["All", ...OWNERS]}
       />
       <FilterSelect
         label="Date"

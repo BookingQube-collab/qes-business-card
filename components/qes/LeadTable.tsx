@@ -50,9 +50,6 @@ export function LeadTable({ leads, onSelect }: LeadTableProps) {
                 Priority
               </th>
               <th className="px-4 py-[11px] text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                Owner
-              </th>
-              <th className="px-4 py-[11px] text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                 Added
               </th>
             </tr>
@@ -90,9 +87,6 @@ export function LeadTable({ leads, onSelect }: LeadTableProps) {
                 </td>
                 <td className="whitespace-nowrap px-4 py-[13px]">
                   <PriorityBadge priority={lead.priority} />
-                </td>
-                <td className="whitespace-nowrap px-4 py-[13px] text-slate-600">
-                  {lead.owner}
                 </td>
                 <td className="whitespace-nowrap px-4 py-[13px] text-slate-500">
                   {formatLeadTime(lead.created_at)}

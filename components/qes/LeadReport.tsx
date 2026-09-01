@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { LeadFiltersBar } from "@/components/qes/LeadFilters";
 import { LeadMobileList } from "@/components/qes/LeadMobileCard";
 import { LeadTable } from "@/components/qes/LeadTable";
 import { ReportStats } from "@/components/qes/Stats";
 import { BOOTH, EVENT_NAME } from "@/lib/constants";
+import { downloadLeadsExcel } from "@/lib/export-leads";
 import type { Lead, LeadFilters, LeadStats } from "@/types/lead";
 
 type LeadReportProps = {
@@ -41,14 +42,25 @@ export function LeadReport({
               {EVENT_NAME} • {BOOTH}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onAddCard}
-            className="qes-gradient-btn inline-flex min-h-11 items-center gap-2 rounded-[10px] px-[18px] py-3 text-[13.5px] font-bold"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Add Business Card
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadLeadsExcel(leads)}
+              disabled={leads.length === 0}
+              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[#e6e8ec] bg-white px-4 py-3 text-[13.5px] font-semibold text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              Export Excel
+            </button>
+            <button
+              type="button"
+              onClick={onAddCard}
+              className="qes-gradient-btn inline-flex min-h-11 items-center gap-2 rounded-[10px] px-[18px] py-3 text-[13.5px] font-bold"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Add Business Card
+            </button>
+          </div>
         </div>
 
         <ReportStats stats={stats} />

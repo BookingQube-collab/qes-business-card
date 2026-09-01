@@ -521,7 +521,7 @@ export function ExtractionIdle() {
       </div>
       <p className="max-w-[280px] text-[13px] leading-relaxed text-[#7c869b]">
         Name, company, mobile and email are read from the card automatically —
-        you only set interest, priority and owner.
+        you only set interest and priority.
       </p>
     </div>
   );

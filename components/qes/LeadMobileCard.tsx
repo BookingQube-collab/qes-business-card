@@ -40,8 +40,7 @@ export function LeadMobileCard({ lead, onSelect }: LeadMobileCardProps) {
         <InterestBadge interest={lead.interest} />
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 text-sm text-slate-500">
-        <span>{lead.owner}</span>
+      <div className="mt-3 flex items-center justify-end gap-2 text-sm text-slate-500">
         <span>{formatLeadTime(lead.created_at)}</span>
       </div>
 
