@@ -1,13 +1,12 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import OpenAI from "openai";
 import { isBoothAuthed } from "@/lib/booth-auth";
 import { resolveGeminiApiKey } from "@/lib/gemini-key";
 import type { ExtractedBusinessCard } from "@/types/ocr";
 
 export const runtime = "nodejs";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-2.5-flash"];
 
 const SYSTEM = `You extract contact fields from a photograph of a business card.
 Return ONLY valid JSON with keys: name, company, position, phone, email.
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const image = form.get("image");
-    // Node/undici may yield Blob rather than File for multipart parts
     if (!(image instanceof Blob) || image.size === 0) {
       return NextResponse.json(
         { error: "Please attach a business card image." },
@@ -48,10 +46,7 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await image.arrayBuffer());
-    const mime =
-      (image.type && image.type !== "application/octet-stream"
-        ? image.type
-        : null) || "image/jpeg";
+    const mime = normalizeMime(image.type);
 
     const raw = geminiKey
       ? await extractWithGemini(geminiKey, buffer, mime)
@@ -67,7 +62,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = JSON.parse(stripCodeFences(raw)) as Partial<ExtractedBusinessCard>;
+    let parsed: Partial<ExtractedBusinessCard>;
+    try {
+      parsed = JSON.parse(stripCodeFences(raw)) as Partial<ExtractedBusinessCard>;
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "We could not read this card clearly. Please try another photo or enter details manually.",
+        },
+        { status: 422 },
+      );
+    }
+
     const extracted: ExtractedBusinessCard = {
       name: clean(parsed.name),
       company: clean(parsed.company),
@@ -96,12 +103,18 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("OCR extract failed", err);
     const message = err instanceof Error ? err.message : "";
-    if (/api key|permission_denied|invalid.*key|quota/i.test(message)) {
+    if (/api key|permission_denied|invalid.*key|quota|blocked/i.test(message)) {
       return NextResponse.json(
         {
           error:
             "Gemini key is invalid or blocked. Open Admin and paste a valid key.",
         },
+        { status: 502 },
+      );
+    }
+    if (/no longer available|not found|NOT_FOUND/i.test(message)) {
+      return NextResponse.json(
+        { error: "Gemini model is unavailable. Try again in a moment." },
         { status: 502 },
       );
     }
@@ -115,32 +128,73 @@ export async function POST(request: Request) {
   }
 }
 
+function normalizeMime(type: string | undefined) {
+  if (!type || type === "application/octet-stream") return "image/jpeg";
+  if (type === "image/jpg") return "image/jpeg";
+  return type;
+}
+
 async function extractWithGemini(
   apiKey: string,
   buffer: Buffer,
   mime: string,
 ): Promise<string | null> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    systemInstruction: SYSTEM,
+  const payload = {
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType: mime,
+              data: buffer.toString("base64"),
+            },
+          },
+          { text: "Extract the business card fields as JSON." },
+        ],
+      },
+    ],
     generationConfig: {
       temperature: 0,
       responseMimeType: "application/json",
     },
-  });
+  };
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: mime,
-        data: buffer.toString("base64"),
+  let lastError = "";
+  for (const model of GEMINI_MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
-    },
-    { text: "Extract the business card fields as JSON." },
-  ]);
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json()) as {
+      error?: { message?: string; status?: string };
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
 
-  return result.response.text() || null;
+    if (!res.ok) {
+      lastError = json.error?.message || `Gemini ${model} failed (${res.status})`;
+      if (res.status === 404) continue;
+      throw new Error(lastError);
+    }
+
+    const text =
+      json.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+        .trim() || "";
+    if (text) return text;
+  }
+
+  if (lastError) throw new Error(lastError);
+  return null;
 }
 
 async function extractWithOpenAI(

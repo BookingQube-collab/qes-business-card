@@ -20,18 +20,18 @@ export async function compressCardImage(file: File): Promise<File> {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
-  const webp = await canvasToBlob(canvas, "image/webp", 0.78);
-  if (webp && webp.size > 0) {
-    return new File([webp], replaceExt(file.name, "webp"), {
-      type: "image/webp",
+  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.85);
+  if (jpeg && jpeg.size > 0) {
+    return new File([jpeg], replaceExt(file.name, "jpg"), {
+      type: "image/jpeg",
       lastModified: Date.now(),
     });
   }
 
-  const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.82);
-  if (jpeg && jpeg.size > 0) {
-    return new File([jpeg], replaceExt(file.name, "jpg"), {
-      type: "image/jpeg",
+  const webp = await canvasToBlob(canvas, "image/webp", 0.78);
+  if (webp && webp.size > 0) {
+    return new File([webp], replaceExt(file.name, "webp"), {
+      type: "image/webp",
       lastModified: Date.now(),
     });
   }
