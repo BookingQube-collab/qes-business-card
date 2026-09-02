@@ -63,14 +63,18 @@ console.log(
 );
 
 function isPdfFile(file) {
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
   return (
-    file.type === "application/pdf" ||
-    file.name.toLowerCase().endsWith(".pdf")
+    type === "application/pdf" ||
+    type === "application/x-pdf" ||
+    name.endsWith(".pdf")
   );
 }
 function isImageFile(file) {
-  if (file.type.startsWith("image/")) return true;
-  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
+  const type = (file.type || "").toLowerCase();
+  if (type.startsWith("image/")) return true;
+  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name || "");
 }
 
 assert(isPdfFile({ name: "cards.PDF", type: "" }), "isPdfFile should accept .PDF");
@@ -87,6 +91,31 @@ assert(
   isImageFile({ name: "a", type: "image/webp" }),
   "isImageFile should accept MIME",
 );
+assert(
+  isPdfFile({ name: "scan", type: "application/x-pdf" }),
+  "isPdfFile should accept application/x-pdf",
+);
+assert(
+  isImageFile({ name: "card.heic", type: "" }),
+  "isImageFile should accept .heic by extension",
+);
+
+function snapshotFileList(list) {
+  if (!list || list.length === 0) return [];
+  return Array.from(list);
+}
+const fakeList = {
+  length: 2,
+  0: { name: "a.jpg", type: "image/jpeg" },
+  1: { name: "b.pdf", type: "application/pdf" },
+  *[Symbol.iterator]() {
+    for (let i = 0; i < this.length; i++) yield this[i];
+  },
+};
+const snapped = snapshotFileList(fakeList);
+fakeList.length = 0; // simulate live FileList clear after input reset
+assert(snapped.length === 2, "snapshotFileList must copy before FileList clears");
+assert(snapped[0].name === "a.jpg", "snapshot keeps first file");
 console.log("[smoke:pdf] file-type helpers OK");
 
 const legacyPath = require.resolve("pdfjs-dist/legacy/build/pdf.mjs");

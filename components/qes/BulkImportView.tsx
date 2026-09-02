@@ -36,6 +36,7 @@ import {
   MAX_BULK_ITEMS,
   MAX_PDF_PAGES,
   pdfFileToPageImages,
+  snapshotFileList,
 } from "@/lib/pdf-pages";
 import type {
   CreateLeadInput,
@@ -161,8 +162,12 @@ export function BulkImportView({
   const [defaultPriority, setDefaultPriority] = useState<Priority | "">("");
   const [items, setItems] = useState<BulkItem[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState("Preparing files…");
   const [batchSaving, setBatchSaving] = useState(false);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
+  const [pdfNoteIsError, setPdfNoteIsError] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
 
   useEffect(() => {
     itemsRef.current = items;
@@ -205,7 +210,9 @@ export function BulkImportView({
       return [];
     });
     setPdfNote(null);
+    setPdfNoteIsError(false);
     setLoadingFiles(false);
+    setLoadingLabel("Preparing files…");
     setBatchSaving(false);
     setEventDate(qatarYesterdayKey());
   }, [open, revokeAll]);
@@ -213,8 +220,9 @@ export function BulkImportView({
   useEffect(() => {
     return () => {
       abortRef.current += 1;
+      revokeAll(itemsRef.current);
     };
-  }, []);
+  }, [revokeAll]);
 
   const patchItem = useCallback((id: string, patch: Partial<BulkItem>) => {
     setItems((prev) => {
@@ -287,14 +295,18 @@ export function BulkImportView({
     }
   }, [items, open, runExtractQueue]);
 
-  async function addFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
+  async function addFiles(files: File[]) {
     if (files.length === 0) return;
 
     setLoadingFiles(true);
+    setLoadingLabel(
+      files.some(isPdfFile) ? "Reading PDF…" : "Adding images…",
+    );
     setPdfNote(null);
-    const token = abortRef.current;
+    setPdfNoteIsError(false);
+    const session = abortRef.current;
     const nextItems: BulkItem[] = [];
+    let enqueued = 0;
 
     try {
       let remaining = MAX_BULK_ITEMS - itemsRef.current.length;
@@ -304,6 +316,10 @@ export function BulkImportView({
       }
 
       for (const file of files) {
+        if (!openRef.current || session !== abortRef.current) {
+          onToast("Import cancelled — modal was closed.");
+          return;
+        }
         if (remaining <= 0) {
           onToast(`Stopped at ${MAX_BULK_ITEMS} cards (import limit).`);
           break;
@@ -311,30 +327,42 @@ export function BulkImportView({
 
         if (isPdfFile(file)) {
           try {
+            setLoadingLabel(`Reading ${file.name || "PDF"}…`);
             const split = await pdfFileToPageImages(file, {
               maxPages: Math.min(MAX_PDF_PAGES, remaining),
+              onProgress: (done, total) => {
+                setLoadingLabel(
+                  `Reading PDF page ${done} of ${total}…`,
+                );
+              },
             });
-            if (token !== abortRef.current) return;
+            if (!openRef.current || session !== abortRef.current) {
+              for (const page of split.pages) {
+                if (page.objectUrl.startsWith("blob:")) {
+                  URL.revokeObjectURL(page.objectUrl);
+                }
+              }
+              onToast("Import cancelled — modal was closed.");
+              return;
+            }
             if (split.pages.length === 0) {
-              onToast(`No pages found in ${file.name}`);
+              onToast(`No pages found in ${file.name || "PDF"}`);
+              setPdfNote(`No pages found in ${file.name || "PDF"}`);
+              setPdfNoteIsError(true);
               continue;
             }
-            if (split.truncated) {
-              setPdfNote(
-                `${file.name}: imported first ${split.pages.length} of ${split.totalPages} pages.`,
-              );
-            } else {
-              setPdfNote(
-                `${file.name}: ${split.pages.length} page${
+            const note = split.truncated
+              ? `${file.name}: imported first ${split.pages.length} of ${split.totalPages} pages.`
+              : `${file.name}: ${split.pages.length} page${
                   split.pages.length === 1 ? "" : "s"
-                } ready for OCR.`,
-              );
-            }
+                } ready for OCR.`;
+            setPdfNote(note);
+            setPdfNoteIsError(false);
             for (const page of split.pages) {
               if (remaining <= 0) break;
               nextItems.push({
                 id: createId(),
-                label: `${file.name} · p${page.pageNumber}`,
+                label: `${file.name || "PDF"} · p${page.pageNumber}`,
                 file: page.file,
                 previewUrl: page.objectUrl,
                 status: "queued",
@@ -347,26 +375,40 @@ export function BulkImportView({
               });
               remaining -= 1;
             }
+            // Show pages in the queue immediately while more files process.
+            if (nextItems.length > 0) {
+              const batch = nextItems.splice(0, nextItems.length);
+              enqueued += batch.length;
+              setItems((prev) => {
+                const merged = [...prev, ...batch];
+                itemsRef.current = merged;
+                return merged;
+              });
+            }
           } catch (err) {
             const message =
               err instanceof Error
                 ? err.message
-                : `Could not read PDF ${file.name}`;
+                : `Could not read PDF ${file.name || ""}`;
             console.error("[bulk-import] PDF failed", file.name, err);
             onToast(message);
             setPdfNote(message);
+            setPdfNoteIsError(true);
           }
           continue;
         }
 
         if (!isImageFile(file)) {
-          onToast(`Skipped unsupported file: ${file.name}`);
+          const label = file.name || file.type || "file";
+          onToast(`Skipped unsupported file: ${label}`);
+          setPdfNote(`Skipped unsupported file: ${label}`);
+          setPdfNoteIsError(true);
           continue;
         }
 
         nextItems.push({
           id: createId(),
-          label: file.name,
+          label: file.name || "Image",
           file,
           previewUrl: URL.createObjectURL(file),
           status: "queued",
@@ -380,11 +422,56 @@ export function BulkImportView({
         remaining -= 1;
       }
 
-      if (nextItems.length === 0) return;
-      setItems((prev) => [...prev, ...nextItems]);
+      if (nextItems.length > 0) {
+        enqueued += nextItems.length;
+        setItems((prev) => {
+          const merged = [...prev, ...nextItems];
+          itemsRef.current = merged;
+          return merged;
+        });
+      } else if (
+        enqueued === 0 &&
+        openRef.current &&
+        session === abortRef.current
+      ) {
+        setPdfNote((prev) =>
+          prev ?? "No usable images or PDF pages were added. Try again.",
+        );
+        setPdfNoteIsError(true);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not add selected files.";
+      console.error("[bulk-import] addFiles failed", err);
+      onToast(message);
+      setPdfNote(message);
+      setPdfNoteIsError(true);
     } finally {
       setLoadingFiles(false);
+      setLoadingLabel("Preparing files…");
     }
+  }
+
+  function onImagesPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    // CRITICAL: copy FileList before clearing value — FileList is live and
+    // becomes empty when the input is reset (breaks image + PDF on some browsers).
+    const files = snapshotFileList(e.target.files);
+    e.target.value = "";
+    if (files.length === 0) {
+      onToast("No files received from the picker. Try again.");
+      return;
+    }
+    void addFiles(files);
+  }
+
+  function onPdfPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = snapshotFileList(e.target.files);
+    e.target.value = "";
+    if (files.length === 0) {
+      onToast("No PDF received from the picker. Try again.");
+      return;
+    }
+    void addFiles(files);
   }
 
   function removeItem(id: string) {
@@ -650,12 +737,19 @@ export function BulkImportView({
             max {MAX_BULK_ITEMS} cards · PDF ≤ {MAX_PDF_PAGES} pages
           </p>
           {pdfNote ? (
-            <p className="mt-1 text-[12px] text-amber-200/90">{pdfNote}</p>
+            <p
+              className={`mt-1 text-[12px] ${
+                pdfNoteIsError ? "text-pink-300" : "text-amber-200/90"
+              }`}
+              role={pdfNoteIsError ? "alert" : "status"}
+            >
+              {pdfNote}
+            </p>
           ) : null}
           {loadingFiles ? (
             <p className="mt-1 flex items-center gap-2 text-[12.5px] text-cyan-300">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              Preparing files…
+              {loadingLabel}
             </p>
           ) : null}
         </div>
@@ -663,10 +757,22 @@ export function BulkImportView({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
           {items.length === 0 ? (
             <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
-              <Upload className="h-8 w-8 text-[#6b7488]" aria-hidden />
-              <p className="text-[14px] text-[#8b93a7]">
-                Add card photos and/or a multi-page PDF to start OCR.
-              </p>
+              {loadingFiles ? (
+                <>
+                  <Loader2
+                    className="h-8 w-8 animate-spin text-cyan-300"
+                    aria-hidden
+                  />
+                  <p className="text-[14px] text-cyan-200/90">{loadingLabel}</p>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-8 w-8 text-[#6b7488]" aria-hidden />
+                  <p className="text-[14px] text-[#8b93a7]">
+                    Add card photos and/or a multi-page PDF to start OCR.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <ul className="space-y-3">
@@ -765,30 +871,25 @@ export function BulkImportView({
         </div>
       </div>
 
+      {/* Keep inputs outside overflow-hidden card; opacity-0 + size for mobile pickers */}
       <input
         ref={imagesInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif"
         multiple
-        className="sr-only"
+        className="fixed left-0 top-0 h-px w-px opacity-0"
         aria-label="Upload business card images"
-        onChange={(e) => {
-          const list = e.target.files;
-          e.target.value = "";
-          if (list) void addFiles(list);
-        }}
+        tabIndex={-1}
+        onChange={onImagesPicked}
       />
       <input
         ref={pdfInputRef}
         type="file"
         accept="application/pdf,.pdf"
-        className="sr-only"
+        className="fixed left-0 top-0 h-px w-px opacity-0"
         aria-label="Upload PDF of business cards"
-        onChange={(e) => {
-          const list = e.target.files;
-          e.target.value = "";
-          if (list) void addFiles(list);
-        }}
+        tabIndex={-1}
+        onChange={onPdfPicked}
       />
     </div>
   );

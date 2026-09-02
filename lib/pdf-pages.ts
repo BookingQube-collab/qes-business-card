@@ -12,15 +12,34 @@ export type PdfPageImage = {
 type PdfjsModule = typeof import("pdfjs-dist");
 
 let pdfjsPromise: Promise<PdfjsModule> | null = null;
-let workerMode: "local" | "cdn" | null = null;
+let workerMode: "local" | "cdn-unpkg" | "cdn-jsdelivr" | null = null;
 
-function cdnWorkerSrc(version: string): string {
+const WORKER_PATH = "/pdf.worker.min.mjs";
+
+function cdnWorkerSrc(
+  version: string,
+  host: "unpkg" | "jsdelivr",
+): string {
+  if (host === "jsdelivr") {
+    return `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+  }
   return `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 }
 
-function configureWorker(pdfjs: PdfjsModule, mode: "local" | "cdn") {
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    mode === "local" ? "/pdf.worker.min.mjs" : cdnWorkerSrc(pdfjs.version);
+function configureWorker(
+  pdfjs: PdfjsModule,
+  mode: "local" | "cdn-unpkg" | "cdn-jsdelivr",
+) {
+  if (mode === "local") {
+    pdfjs.GlobalWorkerOptions.workerSrc = WORKER_PATH;
+  } else if (mode === "cdn-unpkg") {
+    pdfjs.GlobalWorkerOptions.workerSrc = cdnWorkerSrc(pdfjs.version, "unpkg");
+  } else {
+    pdfjs.GlobalWorkerOptions.workerSrc = cdnWorkerSrc(
+      pdfjs.version,
+      "jsdelivr",
+    );
+  }
   workerMode = mode;
 }
 
@@ -30,8 +49,7 @@ async function ensurePdfjs(): Promise<PdfjsModule> {
       .then((pdfjs) => {
         // Prefer same-origin public asset (copied by scripts/copy-pdf-worker.mjs).
         // Do NOT use `new URL("pdfjs-dist/...", import.meta.url)` — Next/Turbopack
-        // often leaves that unresolved, so the worker 404s on Vercel and PDF import
-        // silently fails after a cryptic worker error.
+        // often leaves that unresolved, so the worker 404s on Vercel.
         if (!workerMode) {
           configureWorker(pdfjs, "local");
         }
@@ -50,7 +68,7 @@ async function ensurePdfjs(): Promise<PdfjsModule> {
 
 function isWorkerLoadError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /worker|Setting up fake worker|Failed to fetch|dynamically imported module|Loading failed/i.test(
+  return /worker|Setting up fake worker|Failed to fetch|dynamically imported module|Loading failed|detached|ArrayBuffer/i.test(
     msg,
   );
 }
@@ -77,6 +95,25 @@ function mapPdfError(err: unknown, fileName: string): Error {
   return new Error(`Could not read PDF ${fileName}: ${raw}`);
 }
 
+async function openPdfDocument(
+  pdfjs: PdfjsModule,
+  bytes: ArrayBuffer,
+): Promise<Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>> {
+  // Always copy — getDocument may transfer/detach the TypedArray to the worker.
+  const data = new Uint8Array(bytes.slice(0));
+  return pdfjs.getDocument({
+    data,
+    useSystemFonts: true,
+    isEvalSupported: false,
+  }).promise;
+}
+
+const WORKER_FALLBACKS: Array<"local" | "cdn-unpkg" | "cdn-jsdelivr"> = [
+  "local",
+  "cdn-unpkg",
+  "cdn-jsdelivr",
+];
+
 export type PdfSplitResult = {
   pages: PdfPageImage[];
   totalPages: number;
@@ -100,23 +137,36 @@ export async function pdfFileToPageImages(
 
   const maxPages = options?.maxPages ?? MAX_PDF_PAGES;
   const pdfjs = await ensurePdfjs();
-  const data = new Uint8Array(await pdfFile.arrayBuffer());
+  const bytes = await pdfFile.arrayBuffer();
 
-  let doc: Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
-  try {
-    doc = await pdfjs.getDocument({ data }).promise;
-  } catch (err) {
-    // Local worker 404 / MIME issues → one retry via version-pinned CDN.
-    if (workerMode === "local" && isWorkerLoadError(err)) {
-      configureWorker(pdfjs, "cdn");
-      try {
-        doc = await pdfjs.getDocument({ data }).promise;
-      } catch (retryErr) {
-        throw mapPdfError(retryErr, pdfFile.name);
+  let doc: Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]> | null =
+    null;
+  let lastError: unknown = null;
+
+  const modes = workerMode
+    ? [
+        workerMode,
+        ...WORKER_FALLBACKS.filter((m) => m !== workerMode),
+      ]
+    : WORKER_FALLBACKS;
+
+  for (const mode of modes) {
+    try {
+      configureWorker(pdfjs, mode);
+      doc = await openPdfDocument(pdfjs, bytes);
+      break;
+    } catch (err) {
+      lastError = err;
+      doc = null;
+      if (!isWorkerLoadError(err) && mode === modes[0]) {
+        // Non-worker error on first attempt — still try other workers once,
+        // then map the original error if all fail.
       }
-    } else {
-      throw mapPdfError(err, pdfFile.name);
     }
+  }
+
+  if (!doc) {
+    throw mapPdfError(lastError, pdfFile.name);
   }
 
   const totalPages = doc.numPages;
@@ -180,13 +230,25 @@ export async function pdfFileToPageImages(
 }
 
 export function isPdfFile(file: File): boolean {
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
   return (
-    file.type === "application/pdf" ||
-    file.name.toLowerCase().endsWith(".pdf")
+    type === "application/pdf" ||
+    type === "application/x-pdf" ||
+    name.endsWith(".pdf")
   );
 }
 
 export function isImageFile(file: File): boolean {
-  if (file.type.startsWith("image/")) return true;
-  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
+  const type = (file.type || "").toLowerCase();
+  if (type.startsWith("image/")) return true;
+  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name || "");
+}
+
+/** Snapshot files before resetting the input — FileList is live and clears with value. */
+export function snapshotFileList(
+  list: FileList | File[] | null | undefined,
+): File[] {
+  if (!list || list.length === 0) return [];
+  return Array.from(list);
 }

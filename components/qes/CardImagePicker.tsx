@@ -199,12 +199,25 @@ export function CardImagePicker({
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    // Copy before reset — FileList is live and clears when value is reset.
+    const file = event.target.files?.[0]
+      ? event.target.files[0]
+      : undefined;
+    const files = event.target.files
+      ? Array.from(event.target.files)
+      : [];
     event.target.value = "";
-    if (!file || !file.type.startsWith("image/")) return;
+    const picked = file ?? files[0];
+    if (!picked) return;
+    if (
+      !picked.type.startsWith("image/") &&
+      !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(picked.name || "")
+    ) {
+      return;
+    }
     stopCamera();
     setCameraError(null);
-    onImageSelected(file, URL.createObjectURL(file));
+    onImageSelected(picked, URL.createObjectURL(picked));
   }
 
   function handleRemove() {
