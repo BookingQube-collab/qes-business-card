@@ -5,7 +5,7 @@ import { KeyRound, X } from "lucide-react";
 
 export type GeminiKeyStatus = {
   configured: boolean;
-  source: "admin" | "env" | null;
+  source: "admin" | "env" | "session" | null;
   hint: string | null;
 };
 
@@ -121,10 +121,12 @@ export function AdminPanel({ open, onClose, onStatus }: AdminPanelProps) {
 
   const readyLabel =
     status?.source === "admin"
-      ? `Admin key saved (${status.hint})`
+      ? `Shared admin key active (${status.hint})`
       : status?.source === "env"
         ? `Using server env key (${status.hint})`
-        : "No Gemini key yet — OCR will not read cards";
+        : status?.source === "session"
+          ? `This-browser key only (${status.hint}) — save again to share with all devices`
+          : "No Gemini key yet — OCR will not read cards";
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
@@ -196,8 +198,10 @@ export function AdminPanel({ open, onClose, onStatus }: AdminPanelProps) {
             />
           </label>
           <p className="mt-2 text-[11px] leading-relaxed text-[#8b93a7]">
-            Saved for this browser session on the server. It overrides the env
-            key for card scans until you clear it.
+            Saved on the server for every device on this deployment. Overrides
+            the env key for card scans until you clear it. Prefer setting{" "}
+            <span className="qes-mono">GEMINI_API_KEY</span> on Vercel for a
+            permanent default.
           </p>
 
           {error ? (
@@ -219,7 +223,7 @@ export function AdminPanel({ open, onClose, onStatus }: AdminPanelProps) {
             >
               {loading ? "Saving…" : "Save API key"}
             </button>
-            {status?.source === "admin" ? (
+            {status?.source === "admin" || status?.source === "session" ? (
               <button
                 type="button"
                 disabled={loading}

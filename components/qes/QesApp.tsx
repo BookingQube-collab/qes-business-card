@@ -81,6 +81,7 @@ export function QesApp({
   const [editValues, setEditValues] =
     useState<LeadFormValues>(EMPTY_LEAD_FORM);
   const [signedCardUrl, setSignedCardUrl] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [duplicate, setDuplicate] = useState<Lead | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -455,10 +456,10 @@ export function QesApp({
     }
   }
 
-  async function openLead(lead: Lead) {
+  async function openLead(lead: Lead, options?: { edit?: boolean }) {
     setSelectedLead(lead);
     setEditValues(leadToFormValues(lead));
-    setEditing(false);
+    setEditing(options?.edit ?? false);
     setSheetOpen(true);
     setSignedCardUrl(null);
     try {
@@ -474,6 +475,29 @@ export function QesApp({
     setEditing(false);
     setSelectedLead(null);
     setSignedCardUrl(null);
+  }
+
+  async function handleDeleteLead(lead: Lead) {
+    if (deletingId) return;
+    const confirmed = window.confirm(
+      `Delete lead “${lead.name}”? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(lead.id);
+    try {
+      await api.deleteLead(lead.id);
+      if (selectedLead?.id === lead.id) {
+        closeSheet();
+      }
+      await reloadLeads();
+      setToast("Lead deleted");
+    } catch (err) {
+      console.error(err);
+      setToast(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function handleSaveEdit() {
@@ -618,6 +642,13 @@ export function QesApp({
             onFiltersChange={setFilters}
             onClearFilters={() => setFilters({ ...DEFAULT_FILTERS })}
             onSelectLead={openLead}
+            onEditLead={(lead) => {
+              void openLead(lead, { edit: true });
+            }}
+            onDeleteLead={(lead) => {
+              void handleDeleteLead(lead);
+            }}
+            deletingId={deletingId}
             onAddCard={() => {
               closeSheet();
               resetCapture();
@@ -654,7 +685,15 @@ export function QesApp({
           setEditing(false);
         }}
         onSaveEdit={handleSaveEdit}
+        onDelete={
+          selectedLead
+            ? () => {
+                void handleDeleteLead(selectedLead);
+              }
+            : undefined
+        }
         saving={saving}
+        deleting={Boolean(selectedLead && deletingId === selectedLead.id)}
       />
 
       {duplicate ? (

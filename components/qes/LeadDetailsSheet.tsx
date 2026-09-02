@@ -23,7 +23,9 @@ type LeadDetailsSheetProps = {
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
+  onDelete?: () => void;
   saving?: boolean;
+  deleting?: boolean;
 };
 
 export function leadToFormValues(lead: Lead): LeadFormValues {
@@ -51,7 +53,9 @@ export function LeadDetailsSheet({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  onDelete,
   saving,
+  deleting,
 }: LeadDetailsSheetProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -191,21 +195,33 @@ export function LeadDetailsSheet({
         </div>
 
         {!editing ? (
-          <div className="flex gap-2 border-t border-[#e6e8ec] p-4">
-            <button
-              type="button"
-              onClick={onStartEdit}
-              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[10px] bg-[#2563eb] px-4 text-sm font-semibold text-white active:bg-[#1d4ed8]"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[10px] border border-[#e6e8ec] bg-white px-4 text-sm font-medium text-[#0f172a] active:bg-[#f7f8fa]"
-            >
-              Close
-            </button>
+          <div className="flex flex-col gap-2 border-t border-[#e6e8ec] p-4">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onStartEdit}
+                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[10px] bg-[#2563eb] px-4 text-sm font-semibold text-white active:bg-[#1d4ed8]"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[10px] border border-[#e6e8ec] bg-white px-4 text-sm font-medium text-[#0f172a] active:bg-[#f7f8fa]"
+              >
+                Close
+              </button>
+            </div>
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={deleting}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-[10px] border border-[#f1d5d5] bg-white px-4 text-sm font-semibold text-[#b42318] active:bg-[#fef2f2] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete Lead"}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="border-t border-[#e6e8ec] p-4">

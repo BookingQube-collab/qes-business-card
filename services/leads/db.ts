@@ -160,6 +160,34 @@ export async function dbUpdateLead(
   return mapLeadRow(data as LeadRow);
 }
 
+export async function dbDeleteLead(id: string): Promise<void> {
+  assertSupabaseService();
+  const supabase = createServiceClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("leads")
+    .select("business_card_image")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const { error } = await supabase.from("leads").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const imagePath =
+    existing && typeof existing.business_card_image === "string"
+      ? existing.business_card_image
+      : null;
+  if (
+    imagePath &&
+    !imagePath.startsWith("http") &&
+    !imagePath.startsWith("blob:") &&
+    !imagePath.startsWith("data:")
+  ) {
+    await supabase.storage.from(BUCKET).remove([imagePath]);
+  }
+}
+
 export async function dbSignedCardUrl(
   path: string | null | undefined,
   expiresIn = 60 * 30,

@@ -28,12 +28,14 @@ export function AppHeader({
       <div className="border-b border-[#191d29] bg-[#0c0e14]">
         <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <div
-              className="qes-logo flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-bold"
-              aria-hidden
-            >
-              QES
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/qes-logo.png"
+              alt="Qatar Event Show"
+              width={44}
+              height={44}
+              className="h-10 w-10 shrink-0 rounded-[10px] object-cover sm:h-11 sm:w-11"
+            />
             <div className="flex min-w-0 flex-col gap-0.5">
               <h1 className="truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-50">
                 {APP_TITLE}

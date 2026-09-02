@@ -32,12 +32,13 @@ npm run build
 2. Run migrations in the SQL editor (or Supabase CLI):
    - `supabase/migrations/001_create_leads.sql`
    - `supabase/migrations/002_storage_policies.sql`
+   - `supabase/migrations/003_app_settings.sql` (shared Admin Gemini key for all booth devices)
 3. **Staff auth (required):** There is no public signup. In Supabase Dashboard → **Authentication → Users**, create each staff account with email/password. Optionally disable public sign-ups under Auth → Providers / URL configuration so only dashboard-created users can sign in.
 4. Confirm private Storage bucket `business-cards` exists with the policies from migration 002.
 
 ### 2. OCR (Gemini preferred)
 
-Set `GEMINI_API_KEY` in `.env.local` / Vercel (preferred). Optionally set `OPENAI_API_KEY` as fallback when Gemini is unset. OCR never invents fields and never sets interest / priority / owner.
+Set `GEMINI_API_KEY` in `.env.local` / Vercel (preferred default for every device). Staff can also paste a key in **Admin**; that shared override is stored encrypted in Supabase `app_settings` (requires migration 003 + service role) and works on all booth devices. Optionally set `OPENAI_API_KEY` as fallback when Gemini is unset. OCR never invents fields and never sets interest / priority / owner.
 
 ### 3. Vercel
 

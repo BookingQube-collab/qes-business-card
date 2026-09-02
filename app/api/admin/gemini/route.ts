@@ -2,20 +2,21 @@ import { NextResponse } from "next/server";
 import { isBoothAuthed } from "@/lib/booth-auth";
 import {
   GEMINI_COOKIE,
-  encryptApiKey,
-  geminiKeySource,
+  clearSharedGeminiKey,
+  getGeminiKeyStatus,
   maskApiKey,
-  readAdminGeminiKey,
+  writeSharedGeminiKey,
 } from "@/lib/gemini-key";
 
-function cookieOptions(maxAge: number) {
+function clearLegacyCookie() {
   return {
     name: GEMINI_COOKIE,
+    value: "",
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge,
+    maxAge: 0,
   };
 }
 
@@ -24,16 +25,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const adminKey = await readAdminGeminiKey();
-  const envKey = process.env.GEMINI_API_KEY?.trim() || undefined;
-  const source = geminiKeySource(adminKey, envKey);
-  const active = adminKey || envKey;
-
-  return NextResponse.json({
-    configured: Boolean(active),
-    source,
-    hint: active ? maskApiKey(active) : null,
-  });
+  return NextResponse.json(await getGeminiKeyStatus());
 }
 
 export async function PUT(request: Request) {
@@ -56,16 +48,22 @@ export async function PUT(request: Request) {
     );
   }
 
+  try {
+    await writeSharedGeminiKey(apiKey);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not save Gemini key";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+
   const response = NextResponse.json({
     ok: true,
     configured: true,
     source: "admin",
     hint: maskApiKey(apiKey),
   });
-  response.cookies.set({
-    ...cookieOptions(60 * 60 * 24 * 60),
-    value: encryptApiKey(apiKey),
-  });
+  // Drop any legacy per-browser cookie so resolution stays shared.
+  response.cookies.set(clearLegacyCookie());
   return response;
 }
 
@@ -74,6 +72,8 @@ export async function DELETE() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  await clearSharedGeminiKey();
+
   const envKey = process.env.GEMINI_API_KEY?.trim() || undefined;
   const response = NextResponse.json({
     ok: true,
@@ -81,9 +81,6 @@ export async function DELETE() {
     source: envKey ? "env" : null,
     hint: envKey ? maskApiKey(envKey) : null,
   });
-  response.cookies.set({
-    ...cookieOptions(0),
-    value: "",
-  });
+  response.cookies.set(clearLegacyCookie());
   return response;
 }

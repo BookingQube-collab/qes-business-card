@@ -58,9 +58,14 @@ export function AuthGate({ onAuthed, useSupabase }: AuthGateProps) {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-[20px] border border-[#1e2230] bg-[#11131b] p-6 shadow-2xl"
       >
-        <div className="qes-logo mb-4 flex h-[38px] w-[38px] items-center justify-center rounded-[10px] text-[12.5px] font-bold">
-          QES
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/qes-logo.png"
+          alt="Qatar Event Show"
+          width={48}
+          height={48}
+          className="mb-4 h-12 w-12 rounded-[10px] object-cover"
+        />
         <h1 className="text-lg font-semibold text-white">Staff sign-in</h1>
         <p className="mt-1 text-sm text-slate-400">
           Booth access only — no public signup.

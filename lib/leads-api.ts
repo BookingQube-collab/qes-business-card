@@ -29,6 +29,7 @@ export type LeadApi = {
     options?: { cardFile?: File | Blob | null; id?: string },
   ): Promise<Lead>;
   updateLead(id: string, input: UpdateLeadInput): Promise<Lead>;
+  deleteLead(id: string): Promise<void>;
   findDuplicate(params: {
     email?: string | null;
     phone?: string | null;
@@ -90,6 +91,13 @@ export function getLeadApi(): LeadApi {
         throw new LeadApiError("Could not update lead", res.status);
       }
       return json.lead;
+    },
+    async deleteLead(id) {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      await parseLeadResponse<{ ok?: boolean }>(res, "Could not delete lead");
     },
     async findDuplicate({ email, phone, excludeId }) {
       const params = new URLSearchParams();

@@ -17,6 +17,9 @@ type LeadReportProps = {
   onFiltersChange: (filters: LeadFilters) => void;
   onClearFilters: () => void;
   onSelectLead: (lead: Lead) => void;
+  onEditLead: (lead: Lead) => void;
+  onDeleteLead: (lead: Lead) => void;
+  deletingId?: string | null;
   onAddCard: () => void;
 };
 
@@ -28,6 +31,9 @@ export function LeadReport({
   onFiltersChange,
   onClearFilters,
   onSelectLead,
+  onEditLead,
+  onDeleteLead,
+  deletingId,
   onAddCard,
 }: LeadReportProps) {
   return (
@@ -78,8 +84,20 @@ export function LeadReport({
         </p>
 
         <div className="mt-2.5">
-          <LeadTable leads={leads} onSelect={onSelectLead} />
-          <LeadMobileList leads={leads} onSelect={onSelectLead} />
+          <LeadTable
+            leads={leads}
+            onSelect={onSelectLead}
+            onEdit={onEditLead}
+            onDelete={onDeleteLead}
+            deletingId={deletingId}
+          />
+          <LeadMobileList
+            leads={leads}
+            onSelect={onSelectLead}
+            onEdit={onEditLead}
+            onDelete={onDeleteLead}
+            deletingId={deletingId}
+          />
         </div>
       </div>
     </div>
