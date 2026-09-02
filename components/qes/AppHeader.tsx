@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, KeyRound, LogOut } from "lucide-react";
+import { ArrowLeft, KeyRound, LogOut, Upload } from "lucide-react";
 import { APP_TITLE, BOOTH, EVENT_NAME } from "@/lib/constants";
 
 type AppHeaderProps = {
@@ -9,6 +9,7 @@ type AppHeaderProps = {
   geminiConfigured?: boolean;
   onShowReport: () => void;
   onShowCapture: () => void;
+  onOpenBulkImport?: () => void;
   onOpenAdmin: () => void;
   onLogout?: () => void;
 };
@@ -19,6 +20,7 @@ export function AppHeader({
   geminiConfigured = true,
   onShowReport,
   onShowCapture,
+  onOpenBulkImport,
   onOpenAdmin,
   onLogout,
 }: AppHeaderProps) {
@@ -71,6 +73,19 @@ export function AppHeader({
                 <span className="sm:hidden">Scanner</span>
               </button>
             )}
+
+            {onOpenBulkImport ? (
+              <button
+                type="button"
+                onClick={onOpenBulkImport}
+                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[rgba(34,211,238,0.35)] bg-[rgba(34,211,238,0.08)] px-3 text-[13px] font-semibold text-slate-100"
+                aria-label="Bulk import cards"
+                title="Bulk import cards"
+              >
+                <Upload className="h-4 w-4 text-cyan-300" aria-hidden />
+                <span className="hidden md:inline">Bulk import</span>
+              </button>
+            ) : null}
 
             <button
               type="button"

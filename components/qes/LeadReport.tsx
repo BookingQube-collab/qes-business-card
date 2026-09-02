@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import { LeadFiltersBar } from "@/components/qes/LeadFilters";
 import { LeadMobileList } from "@/components/qes/LeadMobileCard";
 import { LeadTable } from "@/components/qes/LeadTable";
@@ -21,6 +21,7 @@ type LeadReportProps = {
   onDeleteLead: (lead: Lead) => void;
   deletingId?: string | null;
   onAddCard: () => void;
+  onBulkImport?: () => void;
 };
 
 export function LeadReport({
@@ -35,6 +36,7 @@ export function LeadReport({
   onDeleteLead,
   deletingId,
   onAddCard,
+  onBulkImport,
 }: LeadReportProps) {
   return (
     <div className="min-h-[calc(100dvh-73px)] bg-[#f6f7fa] pb-16">
@@ -58,6 +60,16 @@ export function LeadReport({
               <Download className="h-4 w-4" aria-hidden />
               Export Excel
             </button>
+            {onBulkImport ? (
+              <button
+                type="button"
+                onClick={onBulkImport}
+                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[#cfe8f0] bg-[#f0fbfd] px-4 py-3 text-[13.5px] font-semibold text-slate-700 shadow-sm"
+              >
+                <Upload className="h-4 w-4" aria-hidden />
+                Bulk import
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onAddCard}

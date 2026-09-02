@@ -40,6 +40,13 @@ export async function createLead(
     imagePath = path;
   }
 
+  const createdAt = (() => {
+    if (!input.created_at?.trim()) return null;
+    const ms = Date.parse(input.created_at.trim());
+    if (Number.isNaN(ms)) return null;
+    return new Date(ms).toISOString();
+  })();
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -54,6 +61,7 @@ export async function createLead(
       owner: input.owner ?? DEFAULT_OWNER,
       notes: input.notes,
       business_card_image: imagePath,
+      ...(createdAt ? { created_at: createdAt } : {}),
     })
     .select("*")
     .single();

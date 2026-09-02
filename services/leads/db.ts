@@ -127,6 +127,8 @@ export async function dbCreateLead(
     imagePath = path;
   }
 
+  const createdAt = normalizeCreatedAt(input.created_at);
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -141,12 +143,23 @@ export async function dbCreateLead(
       owner: input.owner ?? DEFAULT_OWNER,
       notes: input.notes,
       business_card_image: imagePath,
+      ...(createdAt ? { created_at: createdAt } : {}),
     })
     .select("*")
     .single();
 
   if (error) throw new Error(error.message);
   return mapLeadRow(data as LeadRow);
+}
+
+/** Accept ISO strings; reject invalid / future-far values silently via null. */
+function normalizeCreatedAt(value: string | undefined): string | null {
+  if (!value || typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const ms = Date.parse(trimmed);
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
 }
 
 export async function dbUpdateLead(

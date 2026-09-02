@@ -26,7 +26,10 @@ export interface Lead {
   updated_at: string;
 }
 
-export type CreateLeadInput = Omit<Lead, "id" | "created_at" | "updated_at">;
+/** Optional `created_at` lets bulk import backdate booth-day leads. */
+export type CreateLeadInput = Omit<Lead, "id" | "created_at" | "updated_at"> & {
+  created_at?: string;
+};
 
 export type UpdateLeadInput = Partial<CreateLeadInput>;
 

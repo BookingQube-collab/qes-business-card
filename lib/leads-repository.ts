@@ -29,10 +29,16 @@ export class LocalLeadRepository implements LeadRepository {
 
   async createLead(input: CreateLeadInput): Promise<Lead> {
     const now = new Date().toISOString();
+    const createdAt =
+      input.created_at && !Number.isNaN(Date.parse(input.created_at))
+        ? new Date(input.created_at).toISOString()
+        : now;
+    const rest = { ...input };
+    delete rest.created_at;
     const lead: Lead = {
-      ...input,
+      ...rest,
       id: createId(),
-      created_at: now,
+      created_at: createdAt,
       updated_at: now,
     };
     this.leads = [lead, ...this.leads];

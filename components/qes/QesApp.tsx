@@ -22,6 +22,7 @@ import {
   AdminPanel,
   type GeminiKeyStatus,
 } from "@/components/qes/AdminPanel";
+import { BulkImportView } from "@/components/qes/BulkImportView";
 import { DEFAULT_FILTERS, DEFAULT_OWNER } from "@/lib/constants";
 import {
   clearCaptureDraft,
@@ -96,6 +97,7 @@ export function QesApp({
   const [toast, setToast] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [geminiStatus, setGeminiStatus] = useState<GeminiKeyStatus | null>(
     null,
   );
@@ -681,6 +683,7 @@ export function QesApp({
           closeSheet();
           setView("capture");
         }}
+        onOpenBulkImport={() => setBulkImportOpen(true)}
         onOpenAdmin={() => setAdminOpen(true)}
         onLogout={handleLogout}
       />
@@ -725,9 +728,25 @@ export function QesApp({
               resetCapture();
               setView("capture");
             }}
+            onBulkImport={() => setBulkImportOpen(true)}
           />
         )}
       </main>
+
+      <BulkImportView
+        open={bulkImportOpen}
+        onClose={() => {
+          setBulkImportOpen(false);
+          void reloadLeads();
+        }}
+        existingLeads={leads}
+        onLeadSaved={(lead) => {
+          setLeads((prev) => [lead, ...prev.filter((l) => l.id !== lead.id)]);
+        }}
+        onToast={setToast}
+        geminiConfigured={geminiStatus?.configured ?? true}
+        onOpenAdmin={() => setAdminOpen(true)}
+      />
 
       {ocrError && step === "form" ? (
         <p className="sr-only" role="status">
