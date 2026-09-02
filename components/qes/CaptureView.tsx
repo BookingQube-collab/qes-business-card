@@ -1,5 +1,6 @@
 "use client";
 
+import { RotateCcw } from "lucide-react";
 import {
   CardImagePicker,
   ExtractionIdle,
@@ -10,6 +11,10 @@ import type { LeadStats } from "@/types/lead";
 
 export type CaptureStep = "pick" | "preview" | "reading" | "form";
 
+/**
+ * Phone + tablet booth layout uses Tailwind `lg` (1024px).
+ * Below that: header + scanner only, then extract + Retry after OCR.
+ */
 type CaptureViewProps = {
   stats: LeadStats;
   avgScanMs: number | null;
@@ -17,10 +22,12 @@ type CaptureViewProps = {
   imageUrl: string | null;
   formValues: LeadFormValues;
   ocrError?: string | null;
+  geminiConfigured?: boolean;
   onImageSelected: (file: File, objectUrl: string) => void;
   onRetake: () => void;
   onRemove: () => void;
   onReadCard: () => void;
+  onRetry: () => void;
   onFormChange: (values: LeadFormValues) => void;
   onSave: () => void;
   saving?: boolean;
@@ -54,10 +61,12 @@ export function CaptureView({
   imageUrl,
   formValues,
   ocrError,
+  geminiConfigured = true,
   onImageSelected,
   onRetake,
   onRemove,
   onReadCard,
+  onRetry,
   onFormChange,
   onSave,
   saving,
@@ -79,8 +88,18 @@ export function CaptureView({
   return (
     <div className="qes-capture-bg min-h-[calc(100dvh-65px)]">
       <div className="relative z-10 mx-auto max-w-[1360px] px-4 pb-10 pt-4 sm:px-5">
-        {/* Telemetry strip */}
-        <div className="qes-mono mb-4 overflow-hidden rounded-xl border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)]">
+        {/* Critical only: compact key banner on phone/tablet */}
+        {!geminiConfigured ? (
+          <div
+            className="mb-3 rounded-lg border border-[rgba(240,54,155,0.35)] bg-[rgba(240,54,155,0.1)] px-3 py-2 text-[13px] text-pink-200 lg:hidden"
+            role="status"
+          >
+            Gemini API key needed — tap Admin in the header to scan cards.
+          </div>
+        ) : null}
+
+        {/* Telemetry strip — desktop only */}
+        <div className="qes-mono mb-4 hidden overflow-hidden rounded-xl border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)] lg:block">
           <div className="flex flex-wrap">
             {telemetry.map((item, i) => (
               <div
@@ -103,26 +122,35 @@ export function CaptureView({
           </div>
         </div>
 
-        {/* Main modules */}
+        {/*
+          Phone / tablet (< lg / 1024px): scanner only until extract, then
+          extract + Retry (+ Save Lead). Desktop keeps side-by-side modules.
+        */}
         <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
-          <CardImagePicker
-            imageUrl={
-              step === "preview" || step === "reading" || step === "form"
-                ? imageUrl
-                : null
-            }
-            channelPct={channelPct}
-            statusLabel={mod.label}
-            statusColor={mod.color}
-            processing={processing}
-            onImageSelected={onImageSelected}
-            onRetake={onRetake}
-            onRemove={onRemove}
-            onContinue={onReadCard}
-            disabled={saving || processing}
-          />
+          <div className={showForm ? "hidden lg:block" : undefined}>
+            <CardImagePicker
+              imageUrl={
+                step === "preview" || step === "reading" || step === "form"
+                  ? imageUrl
+                  : null
+              }
+              channelPct={channelPct}
+              statusLabel={mod.label}
+              statusColor={mod.color}
+              processing={processing}
+              onImageSelected={onImageSelected}
+              onRetake={onRetake}
+              onRemove={onRemove}
+              onContinue={onReadCard}
+              disabled={saving || processing}
+            />
+          </div>
 
-          <section className="overflow-hidden rounded-[14px] border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)]">
+          <section
+            className={`overflow-hidden rounded-[14px] border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)] ${
+              showForm ? "" : "hidden lg:block"
+            }`}
+          >
             <div className="qes-mono flex items-center justify-between gap-3 border-b border-[#161b27] px-4 py-3">
               <div className="text-[11px] tracking-[0.16em] text-[#8b93a7]">
                 02 / EXTRACTION OUTPUT
@@ -134,6 +162,15 @@ export function CaptureView({
 
             {showForm ? (
               <div className="space-y-4 p-4">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={onRetry}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[11px] border border-[#242a38] bg-[#11141d] px-3 text-sm font-medium text-slate-300 disabled:opacity-50"
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden />
+                  Retry
+                </button>
                 {imageUrl ? (
                   <div className="overflow-hidden rounded-xl border border-[#202634] bg-[#080a0f]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -180,8 +217,8 @@ export function CaptureView({
           </section>
         </div>
 
-        {/* KPI row */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* KPI row — desktop only */}
+        <div className="mt-5 hidden grid-cols-2 gap-3 sm:grid-cols-4 lg:grid">
           <Kpi
             label="TOTAL COLLECTED"
             value={stats.total}

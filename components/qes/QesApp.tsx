@@ -625,10 +625,12 @@ export function QesApp({
             imageUrl={imageUrl}
             formValues={formValues}
             ocrError={ocrError}
+            geminiConfigured={geminiStatus?.configured ?? true}
             onImageSelected={handleImageSelected}
             onRetake={handleRetake}
             onRemove={handleRemove}
             onReadCard={handleReadCard}
+            onRetry={resetCapture}
             onFormChange={setFormValues}
             onSave={handleSaveLead}
             saving={saving}
