@@ -323,6 +323,12 @@ export function BulkImportView({
               setPdfNote(
                 `${file.name}: imported first ${split.pages.length} of ${split.totalPages} pages.`,
               );
+            } else {
+              setPdfNote(
+                `${file.name}: ${split.pages.length} page${
+                  split.pages.length === 1 ? "" : "s"
+                } ready for OCR.`,
+              );
             }
             for (const page of split.pages) {
               if (remaining <= 0) break;
@@ -342,11 +348,13 @@ export function BulkImportView({
               remaining -= 1;
             }
           } catch (err) {
-            onToast(
+            const message =
               err instanceof Error
                 ? err.message
-                : `Could not read PDF ${file.name}`,
-            );
+                : `Could not read PDF ${file.name}`;
+            console.error("[bulk-import] PDF failed", file.name, err);
+            onToast(message);
+            setPdfNote(message);
           }
           continue;
         }

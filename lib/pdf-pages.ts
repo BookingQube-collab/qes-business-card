@@ -9,18 +9,72 @@ export type PdfPageImage = {
   objectUrl: string;
 };
 
-let workerReady = false;
+type PdfjsModule = typeof import("pdfjs-dist");
 
-async function ensurePdfjs() {
-  const pdfjs = await import("pdfjs-dist");
-  if (!workerReady) {
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
-    workerReady = true;
+let pdfjsPromise: Promise<PdfjsModule> | null = null;
+let workerMode: "local" | "cdn" | null = null;
+
+function cdnWorkerSrc(version: string): string {
+  return `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+}
+
+function configureWorker(pdfjs: PdfjsModule, mode: "local" | "cdn") {
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    mode === "local" ? "/pdf.worker.min.mjs" : cdnWorkerSrc(pdfjs.version);
+  workerMode = mode;
+}
+
+async function ensurePdfjs(): Promise<PdfjsModule> {
+  if (!pdfjsPromise) {
+    pdfjsPromise = import("pdfjs-dist")
+      .then((pdfjs) => {
+        // Prefer same-origin public asset (copied by scripts/copy-pdf-worker.mjs).
+        // Do NOT use `new URL("pdfjs-dist/...", import.meta.url)` — Next/Turbopack
+        // often leaves that unresolved, so the worker 404s on Vercel and PDF import
+        // silently fails after a cryptic worker error.
+        if (!workerMode) {
+          configureWorker(pdfjs, "local");
+        }
+        return pdfjs;
+      })
+      .catch((err) => {
+        pdfjsPromise = null;
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Could not load PDF engine. Refresh and try again. (${detail})`,
+        );
+      });
   }
-  return pdfjs;
+  return pdfjsPromise;
+}
+
+function isWorkerLoadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /worker|Setting up fake worker|Failed to fetch|dynamically imported module|Loading failed/i.test(
+    msg,
+  );
+}
+
+function mapPdfError(err: unknown, fileName: string): Error {
+  if (err instanceof Error && err.message.startsWith("Could not load PDF engine")) {
+    return err;
+  }
+  const raw = err instanceof Error ? err.message : String(err);
+  if (isWorkerLoadError(err)) {
+    return new Error(
+      `PDF worker failed to load for ${fileName}. Refresh the page, or upload card images instead.`,
+    );
+  }
+  if (/password|encrypted/i.test(raw)) {
+    return new Error(`PDF is password-protected: ${fileName}`);
+  }
+  if (/Invalid PDF|Missing PDF|corrupt|FormatError|Unexpected|bad xref/i.test(raw)) {
+    return new Error(`Corrupt or invalid PDF: ${fileName}`);
+  }
+  if (/Could not render PDF page|Could not encode PDF page/i.test(raw)) {
+    return new Error(`${raw} (${fileName})`);
+  }
+  return new Error(`Could not read PDF ${fileName}: ${raw}`);
 }
 
 export type PdfSplitResult = {
@@ -35,13 +89,42 @@ export type PdfSplitResult = {
  */
 export async function pdfFileToPageImages(
   pdfFile: File,
-  options?: { maxPages?: number; onProgress?: (done: number, total: number) => void },
+  options?: {
+    maxPages?: number;
+    onProgress?: (done: number, total: number) => void;
+  },
 ): Promise<PdfSplitResult> {
+  if (typeof document === "undefined") {
+    throw new Error("PDF import only runs in the browser.");
+  }
+
   const maxPages = options?.maxPages ?? MAX_PDF_PAGES;
   const pdfjs = await ensurePdfjs();
   const data = new Uint8Array(await pdfFile.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
+
+  let doc: Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
+  try {
+    doc = await pdfjs.getDocument({ data }).promise;
+  } catch (err) {
+    // Local worker 404 / MIME issues → one retry via version-pinned CDN.
+    if (workerMode === "local" && isWorkerLoadError(err)) {
+      configureWorker(pdfjs, "cdn");
+      try {
+        doc = await pdfjs.getDocument({ data }).promise;
+      } catch (retryErr) {
+        throw mapPdfError(retryErr, pdfFile.name);
+      }
+    } else {
+      throw mapPdfError(err, pdfFile.name);
+    }
+  }
+
   const totalPages = doc.numPages;
+  if (!totalPages || totalPages < 1) {
+    await doc.destroy();
+    throw new Error(`No pages found in ${pdfFile.name}`);
+  }
+
   const renderCount = Math.min(totalPages, maxPages);
   const pages: PdfPageImage[] = [];
   const baseName = pdfFile.name.replace(/\.pdf$/i, "") || "card";
@@ -56,7 +139,7 @@ export async function pdfFileToPageImages(
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.floor(viewport.width));
       canvas.height = Math.max(1, Math.floor(viewport.height));
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) {
         throw new Error("Could not render PDF page");
       }
@@ -78,6 +161,13 @@ export async function pdfFileToPageImages(
       });
       options?.onProgress?.(pageNumber, renderCount);
     }
+  } catch (err) {
+    for (const page of pages) {
+      if (page.objectUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(page.objectUrl);
+      }
+    }
+    throw mapPdfError(err, pdfFile.name);
   } finally {
     await doc.destroy();
   }
