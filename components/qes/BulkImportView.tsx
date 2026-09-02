@@ -15,7 +15,8 @@ import {
   LeadForm,
   type LeadFormValues,
 } from "@/components/qes/LeadForm";
-import { DEFAULT_OWNER } from "@/lib/constants";
+import { SearchableSelect } from "@/components/qes/SearchableSelect";
+import { DEFAULT_OWNER, INTERESTS, PRIORITIES } from "@/lib/constants";
 import {
   compressCardImage,
   compressCardImageForUpload,
@@ -562,47 +563,30 @@ export function BulkImportView({
               </span>
             </label>
             <label className="block text-[12px] font-medium text-[#a9b3c6]">
-              Default interest
-              <select
+              Interest
+              <SearchableSelect
                 value={defaultInterest}
-                onChange={(e) =>
-                  setDefaultInterest(e.target.value as Interest | "")
-                }
-                className="field-input-dark mt-1.5 w-full"
-              >
-                <option value="">Set per card</option>
-                {(
-                  [
-                    "WhatsApp AI",
-                    "Contact Center",
-                    "FEC Solutions",
-                    "Events",
-                    "Partnership",
-                    "Other",
-                  ] as Interest[]
-                ).map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setDefaultInterest(v as Interest | "")}
+                aria-label="Interest"
+                searchPlaceholder="Search interest…"
+                options={[
+                  { value: "", label: "Set per card" },
+                  ...INTERESTS.map((v) => ({ value: v, label: v })),
+                ]}
+              />
             </label>
             <label className="block text-[12px] font-medium text-[#a9b3c6]">
-              Default priority
-              <select
+              Priority
+              <SearchableSelect
                 value={defaultPriority}
-                onChange={(e) =>
-                  setDefaultPriority(e.target.value as Priority | "")
-                }
-                className="field-input-dark mt-1.5 w-full"
-              >
-                <option value="">Set per card</option>
-                {(["Hot", "Warm", "Cold"] as Priority[]).map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setDefaultPriority(v as Priority | "")}
+                aria-label="Priority"
+                searchPlaceholder="Search priority…"
+                options={[
+                  { value: "", label: "Set per card" },
+                  ...PRIORITIES.map((v) => ({ value: v, label: v })),
+                ]}
+              />
             </label>
           </div>
 
