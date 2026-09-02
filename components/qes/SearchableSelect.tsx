@@ -170,7 +170,7 @@ export function SearchableSelect({
             id={listId}
             role="listbox"
             aria-label={ariaLabel}
-            className="max-h-52 overflow-y-auto py-1"
+            className="py-1"
           >
             {filtered.length === 0 ? (
               <li className="px-3 py-2.5 text-[13px] text-[#6b7488]">
