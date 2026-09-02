@@ -56,9 +56,19 @@ export function DuplicateDialog({
             type="button"
             disabled={saving}
             onClick={onSaveAnyway}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[10px] border border-[#e6e8ec] bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50"
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[10px] border border-[#e6e8ec] bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50"
           >
-            Save Anyway
+            {saving ? (
+              <>
+                <span
+                  className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"
+                  aria-hidden
+                />
+                Saving…
+              </>
+            ) : (
+              "Save Anyway"
+            )}
           </button>
           <button
             type="button"

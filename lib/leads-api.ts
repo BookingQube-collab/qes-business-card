@@ -100,9 +100,14 @@ export function getLeadApi(): LeadApi {
       await parseLeadResponse<{ ok?: boolean }>(res, "Could not delete lead");
     },
     async findDuplicate({ email, phone, excludeId }) {
+      const emailTrim = email?.trim() ?? "";
+      const phoneTrim = phone?.trim() ?? "";
+      // Skip round-trip when there is nothing to match.
+      if (!emailTrim && !phoneTrim) return null;
+
       const params = new URLSearchParams();
-      if (email?.trim()) params.set("email", email.trim());
-      if (phone?.trim()) params.set("phone", phone.trim());
+      if (emailTrim) params.set("email", emailTrim);
+      if (phoneTrim) params.set("phone", phoneTrim);
       if (excludeId) params.set("excludeId", excludeId);
       const res = await fetch(`/api/leads/duplicate?${params}`, {
         credentials: "include",

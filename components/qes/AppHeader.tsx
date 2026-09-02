@@ -36,7 +36,8 @@ export function AppHeader({
               height={44}
               className="h-10 w-10 shrink-0 rounded-[10px] object-cover sm:h-11 sm:w-11"
             />
-            <div className="flex min-w-0 flex-col gap-0.5">
+            {/* Title block: desktop only — phone/tablet use logo + page title */}
+            <div className="hidden min-w-0 flex-col gap-0.5 lg:flex">
               <h1 className="truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-50">
                 {APP_TITLE}
               </h1>
@@ -44,6 +45,7 @@ export function AppHeader({
                 {EVENT_NAME} / {BOOTH}
               </p>
             </div>
+            <h1 className="sr-only lg:hidden">{APP_TITLE}</h1>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">

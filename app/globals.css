@@ -317,6 +317,19 @@ textarea.field-input-dark {
   filter: brightness(0.96);
 }
 
+@keyframes qes-save-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.qes-save-indeterminate {
+  animation: qes-save-indeterminate 1.1s ease-in-out infinite;
+}
+
 .qes-capture-bg {
   position: relative;
   overflow: hidden;

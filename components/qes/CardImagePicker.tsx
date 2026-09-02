@@ -298,7 +298,8 @@ export function CardImagePicker({
               <div className="absolute bottom-3.5 left-3.5 z-[7] h-6 w-6 border-b-2 border-l-2 border-[#f0369b]" />
               <div className="absolute bottom-3.5 right-3.5 z-[7] h-6 w-6 border-b-2 border-r-2 border-[#ff8a3d]" />
 
-              <div className="absolute inset-x-0 bottom-2 z-[8] flex items-end justify-between gap-3 px-3 pb-1">
+              {/* Desktop (lg+): overlay on viewfinder. Mobile/tablet: below feed */}
+              <div className="absolute inset-x-0 bottom-2 z-[8] hidden items-end justify-between gap-3 px-3 pb-1 lg:flex">
                 <button
                   type="button"
                   disabled={disabled || capturing}
@@ -454,9 +455,36 @@ export function CardImagePicker({
               PROCESSING PIPELINE…
             </div>
           ) : cameraLive ? (
-            <p className="qes-mono text-center text-[11px] tracking-[0.12em] text-[#8b93a7]">
-              Align the card, then tap Capture
-            </p>
+            <div className="space-y-3">
+              <p className="qes-mono text-center text-[11px] tracking-[0.12em] text-[#8b93a7]">
+                Align the card, then tap Capture
+              </p>
+              {/* Phone / tablet (below lg): thumb-friendly controls under status rows */}
+              <div className="flex items-end justify-between gap-3 px-1 lg:hidden">
+                <button
+                  type="button"
+                  disabled={disabled || capturing}
+                  onClick={handleCancelCamera}
+                  className="inline-flex min-h-12 min-w-12 items-center justify-center gap-1.5 rounded-full border border-[#242a38] bg-[#11141d] px-4 text-sm font-medium text-slate-300 disabled:opacity-50"
+                  aria-label="Cancel camera"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled || capturing || !cameraReady}
+                  onClick={() => void handleShutter()}
+                  className="qes-shutter-btn disabled:opacity-50"
+                  aria-label="Capture photo"
+                >
+                  <span className="qes-shutter-btn__ring" aria-hidden />
+                  <span className="qes-shutter-btn__core" aria-hidden />
+                  <span className="qes-shutter-btn__label qes-mono">Capture</span>
+                </button>
+                <div className="min-h-12 min-w-[4.5rem]" aria-hidden />
+              </div>
+            </div>
           ) : (
             <>
               <button

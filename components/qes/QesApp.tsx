@@ -27,10 +27,19 @@ import {
   clearCaptureDraft,
   saveCaptureDraft,
 } from "@/lib/capture-draft";
-import { compressCardImage } from "@/lib/compress-image";
+import {
+  compressCardImage,
+  compressCardImageForUpload,
+} from "@/lib/compress-image";
 import { getLeadApi, LeadApiError } from "@/lib/leads-api";
 import { buildLeadNotes } from "@/lib/lead-form-utils";
-import { computeStats, createId, filterLeads } from "@/lib/lead-utils";
+import {
+  computeStats,
+  createId,
+  filterLeads,
+  normalizeEmail,
+  normalizePhone,
+} from "@/lib/lead-utils";
 import { normalizeOcrEmail } from "@/lib/ocr-email";
 import { createClient } from "@/lib/supabase/client";
 import { setRuntimeSupabaseConfig } from "@/lib/supabase/env";
@@ -369,7 +378,23 @@ export function QesApp({
     }
   }
 
-  async function persistLead() {
+  function findLocalDuplicate(
+    email: string,
+    phone: string,
+  ): Lead | null {
+    const e = normalizeEmail(email);
+    const p = normalizePhone(phone);
+    if (!e && !p) return null;
+    return (
+      leads.find((lead) => {
+        if (e && normalizeEmail(lead.email) === e) return true;
+        if (p && normalizePhone(lead.phone) === p) return true;
+        return false;
+      }) ?? null
+    );
+  }
+
+  async function persistLead(options?: { skipCardPrepare?: boolean }) {
     if (
       !formValues.name.trim() ||
       !formValues.company.trim() ||
@@ -378,6 +403,7 @@ export function QesApp({
       (formValues.interest === "Other" && !formValues.interestOther.trim())
     ) {
       setToast("Please complete required fields");
+      setSaving(false);
       return;
     }
 
@@ -396,12 +422,27 @@ export function QesApp({
     };
 
     try {
-      await api.createLead(input, {
-        cardFile: cardFileRef.current,
+      let cardFile = cardFileRef.current;
+      if (cardFile && !options?.skipCardPrepare) {
+        try {
+          cardFile = await compressCardImageForUpload(cardFile);
+          cardFileRef.current = cardFile;
+        } catch {
+          /* keep original file */
+        }
+      }
+
+      const lead = await api.createLead(input, {
+        cardFile,
         id: createId(),
       });
-      await reloadLeads();
+
+      // Optimistic local update — don't block UI on full list reload.
+      setLeads((prev) => [lead, ...prev.filter((l) => l.id !== lead.id)]);
       setToast("Business card saved");
+      if (imageUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(imageUrlRef.current);
+      }
       imageUrlRef.current = null;
       cardFileRef.current = null;
       setImageUrl(null);
@@ -409,6 +450,7 @@ export function QesApp({
       setStep("pick");
       setDuplicate(null);
       clearCaptureDraft();
+      void reloadLeads();
     } catch (err) {
       console.error(err);
       setToast(
@@ -423,16 +465,40 @@ export function QesApp({
 
   async function handleSaveLead() {
     if (saving) return;
+    setSaving(true);
+
+    const email = formValues.email.trim();
+    const phone = formValues.phone.trim();
+
+    // Start archive compress in parallel with duplicate check.
+    const uploadReady =
+      cardFileRef.current != null
+        ? compressCardImageForUpload(cardFileRef.current)
+            .then((file) => {
+              cardFileRef.current = file;
+              return file;
+            })
+            .catch(() => cardFileRef.current)
+        : Promise.resolve(null);
+
     try {
-      const dup = await api.findDuplicate({
-        email: formValues.email,
-        phone: formValues.phone,
-      });
+      let dup: Lead | null = null;
+      if (email || phone) {
+        // Instant path against already-loaded leads.
+        dup = findLocalDuplicate(email, phone);
+        if (!dup) {
+          dup = await api.findDuplicate({ email, phone });
+        }
+      }
+
       if (dup) {
         setDuplicate(dup);
+        setSaving(false);
         return;
       }
-      await persistLead();
+
+      await uploadReady;
+      await persistLead({ skipCardPrepare: true });
     } catch (err) {
       console.error(err);
       const message = err instanceof Error ? err.message : "";
@@ -440,10 +506,12 @@ export function QesApp({
 
       if (status === 401 || /unauthorized/i.test(message)) {
         setAuthed(false);
+        setSaving(false);
         setToast("Please sign in again");
         return;
       }
       if (status === 503 || /not configured/i.test(message)) {
+        setSaving(false);
         setToast(
           message ||
             "Leads storage is not configured on the server. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.",
@@ -452,7 +520,8 @@ export function QesApp({
       }
 
       setToast("Could not verify duplicates — saving anyway");
-      await persistLead();
+      await uploadReady;
+      await persistLead({ skipCardPrepare: true });
     }
   }
 

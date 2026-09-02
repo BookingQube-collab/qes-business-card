@@ -22,6 +22,8 @@ type LeadFormProps = {
   onSubmit: () => void;
   submitLabel?: string;
   disabled?: boolean;
+  /** Shows spinner + "Saving…" and blocks double-submit. */
+  busy?: boolean;
   variant?: "light" | "dark";
 };
 
@@ -43,6 +45,7 @@ export function LeadForm({
   onSubmit,
   submitLabel = "Save Lead",
   disabled,
+  busy,
   variant = "light",
 }: LeadFormProps) {
   const dark = variant === "dark";
@@ -53,6 +56,7 @@ export function LeadForm({
   const legendClass = dark
     ? "text-sm font-medium text-slate-200"
     : "text-sm font-medium text-[#0f172a]";
+  const locked = Boolean(disabled || busy);
 
   function setField<K extends keyof LeadFormValues>(
     key: K,
@@ -74,7 +78,7 @@ export function LeadForm({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!canSave || disabled) return;
+        if (!canSave || locked) return;
         onSubmit();
       }}
     >
@@ -87,6 +91,7 @@ export function LeadForm({
             onChange={(e) => setField("name", e.target.value)}
             autoComplete="name"
             required
+            disabled={locked}
           />
         </Field>
         <Field label="Company" htmlFor="lead-company" labelClass={labelClass}>
@@ -97,6 +102,7 @@ export function LeadForm({
             onChange={(e) => setField("company", e.target.value)}
             autoComplete="organization"
             required
+            disabled={locked}
           />
         </Field>
         <Field label="Position" htmlFor="lead-position" labelClass={labelClass}>
@@ -106,6 +112,7 @@ export function LeadForm({
             value={values.position}
             onChange={(e) => setField("position", e.target.value)}
             autoComplete="organization-title"
+            disabled={locked}
           />
         </Field>
         <Field label="Mobile" htmlFor="lead-phone" labelClass={labelClass}>
@@ -117,6 +124,7 @@ export function LeadForm({
             value={values.phone}
             onChange={(e) => setField("phone", e.target.value)}
             autoComplete="tel"
+            disabled={locked}
           />
         </Field>
         <Field
@@ -133,6 +141,7 @@ export function LeadForm({
             value={values.email}
             onChange={(e) => setField("email", e.target.value)}
             autoComplete="email"
+            disabled={locked}
           />
         </Field>
       </div>
@@ -146,7 +155,7 @@ export function LeadForm({
               <button
                 key={interest}
                 type="button"
-                disabled={disabled}
+                disabled={locked}
                 onClick={() =>
                   onChange({
                     ...values,
@@ -183,6 +192,7 @@ export function LeadForm({
               onChange={(e) => setField("interestOther", e.target.value)}
               placeholder="What are they interested in?"
               required
+              disabled={locked}
             />
           </Field>
         ) : null}
@@ -197,7 +207,7 @@ export function LeadForm({
               <button
                 key={priority}
                 type="button"
-                disabled={disabled}
+                disabled={locked}
                 onClick={() => setField("priority", priority)}
                 className={`inline-flex min-h-11 items-center justify-center rounded-xl border text-sm font-semibold transition-colors ${
                   selected
@@ -228,15 +238,27 @@ export function LeadForm({
           placeholder="Important discussion or follow-up notes..."
           value={values.notes}
           onChange={(e) => setField("notes", e.target.value)}
+          disabled={locked}
         />
       </Field>
 
       <button
         type="submit"
-        disabled={!canSave || disabled}
-        className="qes-gradient-btn inline-flex min-h-12 w-full items-center justify-center rounded-xl px-4 text-base font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={!canSave || locked}
+        aria-busy={busy || undefined}
+        className="qes-gradient-btn inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-base font-semibold disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitLabel}
+        {busy ? (
+          <>
+            <span
+              className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/85 border-t-transparent"
+              aria-hidden
+            />
+            Saving…
+          </>
+        ) : (
+          submitLabel
+        )}
       </button>
     </form>
   );

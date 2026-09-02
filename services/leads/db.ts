@@ -43,6 +43,11 @@ function matchesDuplicate(
   return false;
 }
 
+/** Match stored phones whose digits equal `digits`, ignoring formatting. */
+function phoneDigitsRegex(digits: string): string {
+  return `^[^0-9]*${digits.split("").join("[^0-9]*")}[^0-9]*$`;
+}
+
 export async function dbFindDuplicate(params: {
   email?: string | null;
   phone?: string | null;
@@ -54,35 +59,49 @@ export async function dbFindDuplicate(params: {
 
   assertSupabaseService();
   const supabase = createServiceClient();
+  const matchOpts = { email, phone, excludeId: params.excludeId };
+
+  const lookups: Promise<Lead | null>[] = [];
 
   if (email) {
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*")
-      .ilike("email", email)
-      .limit(20);
-    if (error) throw new Error(error.message);
-    const match = ((data ?? []) as LeadRow[])
-      .map(mapLeadRow)
-      .find((lead) => matchesDuplicate(lead, { email, phone, excludeId: params.excludeId }));
-    if (match) return match;
+    lookups.push(
+      (async () => {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("*")
+          .ilike("email", email)
+          .limit(20);
+        if (error) throw new Error(error.message);
+        return (
+          ((data ?? []) as LeadRow[])
+            .map(mapLeadRow)
+            .find((lead) => matchesDuplicate(lead, matchOpts)) ?? null
+        );
+      })(),
+    );
   }
 
   if (phone) {
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*")
-      .not("phone", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw new Error(error.message);
-    const match = ((data ?? []) as LeadRow[])
-      .map(mapLeadRow)
-      .find((lead) => matchesDuplicate(lead, { email, phone, excludeId: params.excludeId }));
-    if (match) return match;
+    lookups.push(
+      (async () => {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("*")
+          .not("phone", "is", null)
+          .filter("phone", "match", phoneDigitsRegex(phone))
+          .limit(20);
+        if (error) throw new Error(error.message);
+        return (
+          ((data ?? []) as LeadRow[])
+            .map(mapLeadRow)
+            .find((lead) => matchesDuplicate(lead, matchOpts)) ?? null
+        );
+      })(),
+    );
   }
 
-  return null;
+  const results = await Promise.all(lookups);
+  return results.find((lead): lead is Lead => lead != null) ?? null;
 }
 
 export async function dbCreateLead(

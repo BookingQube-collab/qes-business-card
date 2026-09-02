@@ -76,6 +76,10 @@ export function CaptureView({
   const mod = moduleStatus(step);
   const showForm = step === "form";
   const processing = step === "reading";
+  const attachedUrl =
+    step === "preview" || step === "reading" || step === "form"
+      ? imageUrl
+      : null;
 
   const telemetry = [
     { k: "SESSION", v: "QES-2026-D14", color: "#cbd5e1" },
@@ -122,6 +126,9 @@ export function CaptureView({
           </div>
         </div>
 
+        {/* Attached card preview — phone/tablet compact booth */}
+        <AttachedCardSection imageUrl={attachedUrl} />
+
         {/*
           Phone / tablet (< lg / 1024px): scanner only until extract, then
           extract + Retry (+ Save Lead). Desktop keeps side-by-side modules.
@@ -129,11 +136,7 @@ export function CaptureView({
         <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
           <div className={showForm ? "hidden lg:block" : undefined}>
             <CardImagePicker
-              imageUrl={
-                step === "preview" || step === "reading" || step === "form"
-                  ? imageUrl
-                  : null
-              }
+              imageUrl={attachedUrl}
               channelPct={channelPct}
               statusLabel={mod.label}
               statusColor={mod.color}
@@ -156,12 +159,37 @@ export function CaptureView({
                 02 / EXTRACTION OUTPUT
               </div>
               <div className="text-[10.5px] tracking-[0.1em] text-[#5b657a]">
-                {extractionStatus(step)}
+                {saving ? "SAVING" : extractionStatus(step)}
               </div>
             </div>
 
             {showForm ? (
-              <div className="space-y-4 p-4">
+              <div className="relative space-y-4 p-4">
+                {saving ? (
+                  <div
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-b-[14px] bg-[#0a0c11]/88 px-6 backdrop-blur-[2px]"
+                    role="status"
+                    aria-live="polite"
+                    aria-busy="true"
+                  >
+                    <div
+                      className="h-10 w-10 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"
+                      aria-hidden
+                    />
+                    <div className="qes-mono text-[11px] tracking-[0.14em] text-cyan-300">
+                      SAVING LEAD
+                    </div>
+                    <div
+                      className="h-1.5 w-44 overflow-hidden rounded-full bg-[#1b2130]"
+                      aria-hidden
+                    >
+                      <div className="qes-save-indeterminate h-full w-1/2 rounded-full bg-gradient-to-r from-cyan-500/30 via-cyan-400 to-cyan-500/30" />
+                    </div>
+                    <p className="max-w-[260px] text-center text-[13px] text-[#7c869b]">
+                      Uploading card image and saving lead…
+                    </p>
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   disabled={saving}
@@ -172,7 +200,7 @@ export function CaptureView({
                   Retry
                 </button>
                 {imageUrl ? (
-                  <div className="overflow-hidden rounded-xl border border-[#202634] bg-[#080a0f]">
+                  <div className="hidden overflow-hidden rounded-xl border border-[#202634] bg-[#080a0f] lg:block">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={imageUrl}
@@ -198,6 +226,7 @@ export function CaptureView({
                   onChange={onFormChange}
                   onSubmit={onSave}
                   disabled={saving}
+                  busy={saving}
                   variant="dark"
                 />
               </div>
@@ -242,6 +271,45 @@ export function CaptureView({
         </div>
       </div>
     </div>
+  );
+}
+
+function AttachedCardSection({ imageUrl }: { imageUrl: string | null }) {
+  return (
+    <section
+      className="mb-4 overflow-hidden rounded-[14px] border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)] lg:hidden"
+      aria-label="Attached card"
+    >
+      <div className="qes-mono flex items-center justify-between gap-3 border-b border-[#161b27] px-4 py-3">
+        <div className="text-[11px] tracking-[0.16em] text-[#8b93a7]">
+          ATTACHED CARD
+        </div>
+        <div className="text-[10.5px] tracking-[0.1em] text-[#5b657a]">
+          {imageUrl ? "READY" : "EMPTY"}
+        </div>
+      </div>
+      {imageUrl ? (
+        <div className="p-4">
+          <div className="overflow-hidden rounded-xl border border-[#202634] bg-[#080a0f]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt="Attached business card"
+              className="mx-auto max-h-40 w-full object-contain p-2"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+          <div className="qes-mono text-[11px] tracking-[0.14em] text-[#6b7488]">
+            No card attached yet
+          </div>
+          <p className="max-w-[260px] text-[13px] leading-relaxed text-[#7c869b]">
+            Capture or upload a business card below — it will show here.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 

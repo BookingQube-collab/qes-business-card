@@ -148,6 +148,7 @@ export function LeadDetailsSheet({
               onSubmit={onSaveEdit}
               submitLabel="Save Changes"
               disabled={saving}
+              busy={saving}
             />
           ) : (
             <dl className="space-y-3 text-sm">
