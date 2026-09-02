@@ -126,8 +126,10 @@ export function CaptureView({
           </div>
         </div>
 
-        {/* Attached card preview — phone/tablet compact booth */}
-        <AttachedCardSection imageUrl={attachedUrl} />
+        {/* Phone/tablet booth title — no attached-card preview */}
+        <p className="mb-4 text-[15px] font-medium tracking-[-0.01em] text-slate-200 lg:hidden">
+          QES Business Card Leads /D 14
+        </p>
 
         {/*
           Phone / tablet (< lg / 1024px): scanner only until extract, then
@@ -271,45 +273,6 @@ export function CaptureView({
         </div>
       </div>
     </div>
-  );
-}
-
-function AttachedCardSection({ imageUrl }: { imageUrl: string | null }) {
-  return (
-    <section
-      className="mb-4 overflow-hidden rounded-[14px] border border-[#1b2130] bg-[linear-gradient(#0d1017,#0a0c11)] lg:hidden"
-      aria-label="Attached card"
-    >
-      <div className="qes-mono flex items-center justify-between gap-3 border-b border-[#161b27] px-4 py-3">
-        <div className="text-[11px] tracking-[0.16em] text-[#8b93a7]">
-          ATTACHED CARD
-        </div>
-        <div className="text-[10.5px] tracking-[0.1em] text-[#5b657a]">
-          {imageUrl ? "READY" : "EMPTY"}
-        </div>
-      </div>
-      {imageUrl ? (
-        <div className="p-4">
-          <div className="overflow-hidden rounded-xl border border-[#202634] bg-[#080a0f]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl}
-              alt="Attached business card"
-              className="mx-auto max-h-40 w-full object-contain p-2"
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-          <div className="qes-mono text-[11px] tracking-[0.14em] text-[#6b7488]">
-            No card attached yet
-          </div>
-          <p className="max-w-[260px] text-[13px] leading-relaxed text-[#7c869b]">
-            Capture or upload a business card below — it will show here.
-          </p>
-        </div>
-      )}
-    </section>
   );
 }
 
